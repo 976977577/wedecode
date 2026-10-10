@@ -75,80 +75,109 @@
             margin-bottom: 30px;
         }
 
-        /* ---- 本机包扫描 ---- */
+        /* ==================== 本机包扫描 ==================== */
         .scan-only {
-            margin: 20px 0 24px;
-            border: 1px solid #e0e0e0;
-            border-radius: 12px;
+            margin: 18px 0 22px;
+            border: 1px solid #e6e8ef;
+            border-radius: 14px;
             overflow: hidden;
             text-align: left;
+            background: #fff;
         }
 
         .scan-head {
             display: flex;
             align-items: center;
             gap: 10px;
-            padding: 12px 14px;
-            background: #f8f9ff;
-            border-bottom: 1px solid #ececec;
+            padding: 14px 18px;
+            background: linear-gradient(180deg, #f7f8fc 0%, #fbfbfd 100%);
+            border-bottom: 1px solid #eceef4;
         }
 
         .scan-title {
             flex: 1;
-            font-size: 0.95em;
-            color: #333;
+            font-size: 0.98em;
             font-weight: 500;
+            color: #2f3542;
         }
 
         .scan-btn {
-            border: none;
-            background: #667eea;
-            color: #fff;
-            padding: 7px 14px;
+            border: 1px solid transparent;
+            background: #fff;
+            color: #4a4f5c;
+            padding: 7px 16px;
             border-radius: 8px;
-            font-size: 0.85em;
+            font-size: 0.86em;
+            font-weight: 500;
             cursor: pointer;
             display: inline-flex;
             align-items: center;
             gap: 6px;
             font-family: inherit;
+            white-space: nowrap;
+            transition: background .15s ease, color .15s ease, border-color .15s ease;
         }
 
         .scan-btn:hover:not(:disabled) {
-            background: #764ba2;
+            background: #f0f2f8;
+            color: #2f3542;
         }
 
         .scan-btn:disabled {
-            opacity: 0.55;
+            opacity: .5;
             cursor: not-allowed;
         }
 
+        .scan-btn-primary {
+            background: #5b6cff;
+            border-color: #5b6cff;
+            color: #fff;
+            padding: 9px 22px;
+            font-size: 0.9em;
+        }
+
+        .scan-btn-primary:hover:not(:disabled) {
+            background: #4a5bf0;
+            border-color: #4a5bf0;
+            color: #fff;
+        }
+
         .scan-body {
-            padding: 12px 14px;
-            font-size: 0.88em;
+            padding: 0;
+            font-size: 0.9em;
+        }
+
+        .scan-summary {
+            padding: 12px 18px 8px;
+            color: #6b7280;
+        }
+
+        .scan-summary strong {
+            color: #2f3542;
         }
 
         .scan-hint {
-            color: #b06a00;
-            background: #fff8e6;
-            border: 1px solid #ffe4a3;
-            border-radius: 8px;
-            padding: 10px 12px;
-            line-height: 1.6;
+            margin: 12px 18px;
+            color: #9a6200;
+            background: #fff8e8;
+            border: 1px solid #ffe3a8;
+            border-radius: 10px;
+            padding: 12px 14px;
+            line-height: 1.7;
         }
 
         .scan-hint code {
-            background: #f1f1f1;
+            background: rgba(0, 0, 0, .05);
             padding: 1px 5px;
             border-radius: 4px;
-            font-size: 0.92em;
+            font-size: .92em;
         }
 
         .scan-paths {
-            margin-top: 10px;
-            color: #888;
-            font-size: 0.92em;
-            line-height: 1.7;
+            margin: 0 18px 14px;
+            color: #8b90a0;
+            font-size: .92em;
+            line-height: 1.8;
             word-break: break-all;
         }
 
@@ -156,53 +185,75 @@
             display: flex;
             align-items: flex-start;
             gap: 8px;
-            background: #eef4ff;
-            border: 1px solid #c9dbff;
-            border-radius: 8px;
-            padding: 10px 12px;
-            margin-bottom: 10px;
-            color: #3b5b9c;
-            font-size: 0.9em;
-            line-height: 1.6;
+            margin: 0 18px 12px;
+            background: #f2f6ff;
+            border: 1px solid #d5e2ff;
+            border-radius: 10px;
+            padding: 10px 13px;
+            color: #43599b;
+            line-height: 1.65;
+        }
+
+        .scan-notice i {
+            margin-top: 2px;
         }
 
         .name-tag {
             display: inline-block;
-            margin-left: 6px;
-            padding: 1px 6px;
-            border-radius: 4px;
-            background: #f0f0f0;
-            color: #999;
-            font-size: 0.8em;
+            margin-left: 8px;
+            padding: 1px 7px;
+            border-radius: 20px;
+            background: #f0f1f5;
+            color: #9aa0ae;
+            font-size: .78em;
             font-weight: 400;
             vertical-align: middle;
         }
 
+        /* ---- 包列表 ---- */
         .scan-list {
             list-style: none;
-            max-height: 260px;
+            max-height: 280px;
             overflow-y: auto;
+            border-top: 1px solid #f0f1f5;
         }
 
         .scan-list-item {
+            position: relative;
             display: flex;
             align-items: center;
-            gap: 12px;
-            padding: 10px 8px;
-            border-bottom: 1px solid #f0f0f0;
+            gap: 14px;
+            padding: 11px 18px;
+            border-bottom: 1px solid #f5f6f9;
             cursor: pointer;
+            transition: background .12s ease;
         }
 
         .scan-list-item:last-child {
             border-bottom: none;
         }
 
+        .scan-list-item::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 3px;
+            background: transparent;
+            transition: background .12s ease;
+        }
+
         .scan-list-item:hover {
-            background: #f8f9ff;
+            background: #fafbfd;
         }
 
         .scan-list-item.selected {
-            background: #eef0ff;
+            background: #f4f6ff;
+        }
+
+        .scan-list-item.selected::before {
+            background: #5b6cff;
         }
 
         .scan-item-main {
@@ -210,34 +261,67 @@
             min-width: 0;
         }
 
-        /* 日期列固定宽度且不参与收缩, 避免长路径把它挤出可视区 */
-        .scan-item-date {
-            color: #666;
-            font-size: 0.9em;
-            white-space: nowrap;
-            flex: 0 0 auto;
-        }
-
         .scan-item-name {
-            color: #333;
-            margin-bottom: 3px;
+            color: #2f3542;
+            font-weight: 500;
+            margin-bottom: 2px;
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
         }
 
         .scan-item-meta {
-            color: #888;
-            font-size: 0.9em;
+            color: #9aa0ae;
+            font-size: .88em;
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
         }
 
+        .scan-item-date {
+            color: #9aa0ae;
+            font-size: .86em;
+            white-space: nowrap;
+            flex: 0 0 auto;
+        }
+
+        /* ---- 选中后的操作条 ---- */
         .scan-selected-tip {
-            margin-top: 10px;
-            color: #4a4a4a;
-            font-size: 0.9em;
+            display: none;
+            align-items: center;
+            gap: 16px;
+            padding: 12px 18px;
+            border-top: 1px solid #e9ebf2;
+            background: #fbfbfe;
+        }
+
+        .scan-picked {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .scan-picked-label {
+            font-size: .78em;
+            color: #9aa0ae;
+            margin-bottom: 2px;
+        }
+
+        .scan-picked-name {
+            color: #2f3542;
+            font-weight: 500;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .scan-picked-path {
+            color: #9aa0ae;
+            font-size: .82em;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            direction: rtl;
+            text-align: left;
         }
 
         .buttons {

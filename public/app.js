@@ -108,14 +108,14 @@ class WedecodeApp {
                         ${pkg.isAppId && !pkg.nameResolved
                             ? '<span class="name-tag">仅 appid</span>' : ''}
                     </div>
-                    <div class="scan-item-meta">${this.escapeHtml(pkg.description || pkg.storagePath)}</div>
+                    <div class="scan-item-meta">${this.escapeHtml(this.shortPath(pkg.storagePath))}</div>
                 </div>
                 <div class="scan-item-date">${this.escapeHtml(pkg.updateDate)}</div>
             </li>
         `).join('');
 
         // 昵称只能由第三方接口提供, 该接口挂了就把原因说清楚,
-        // 否则用户会对着满屏 appid 不知道出了什么问题
+        // 否则用户会对着满屏appid 不知道出了什么问题
         const nameNotice = data.nameLookupFailed ? `
             <div class="scan-notice">
                 <i class="fas fa-info-circle"></i>
@@ -125,7 +125,7 @@ class WedecodeApp {
         ` : '';
 
         this.scanBody.innerHTML = `
-            <div style="color:#666;margin-bottom:8px;">找到 ${packages.length} 个小程序包，点击选中后可反编译:</div>
+            <div class="scan-summary">找到 <strong>${packages.length}</strong> 个小程序包,点击一项即可反编译</div>
             ${nameNotice}
             <ul class="scan-list" id="scanList">${items}</ul>
             <div class="scan-selected-tip" id="scanSelectedTip" style="display:none;"></div>
@@ -134,6 +134,17 @@ class WedecodeApp {
         this.scanBody.querySelectorAll('.scan-list-item').forEach(el => {
             el.addEventListener('click', () => this.selectScanPackage(Number(el.dataset.scanIndex), el));
         });
+    }
+
+    /**
+     * 路径太长会挤掉日期列, 这里只保留末两段(appid / packages),
+     * 完整路径在选中后仍会展示。
+     */
+    shortPath(fullPath, keep = 2) {
+        if (!fullPath) return '';
+        const parts = String(fullPath).split('/').filter(Boolean);
+        if (parts.length <= keep) return fullPath;
+        return '…/' + parts.slice(-keep).join('/');
     }
 
     selectScanPackage(index, el) {
@@ -145,14 +156,17 @@ class WedecodeApp {
         el.classList.add('selected');
 
         const tip = document.getElementById('scanSelectedTip');
-        tip.style.display = 'block';
+        tip.style.display = 'flex';
         tip.innerHTML = `
-            <div style="margin-bottom:10px;">
-                已选择 <strong>${this.escapeHtml(pkg.appName || pkg.appId)}</strong><br>
-                <span style="color:#888;">包目录: ${this.escapeHtml(pkg.storagePath)}</span>
+            <div class="scan-picked">
+                <div class="scan-picked-label">已选择</div>
+                <div class="scan-picked-main">
+                    <div class="scan-picked-name">${this.escapeHtml(pkg.appName || pkg.appId)}</div>
+                    <div class="scan-picked-path" title="${this.escapeHtml(pkg.storagePath)}">${this.escapeHtml(pkg.storagePath)}</div>
+                </div>
             </div>
-            <button type="button" class="scan-btn" id="compileScanBtn">
-                <i class="fas fa-play"></i> 反编译此包
+            <button type="button" class="scan-btn scan-btn-primary" id="compileScanBtn">
+                <i class="fas fa-play"></i> 反编译
             </button>
         `;
 
@@ -192,17 +206,29 @@ class WedecodeApp {
             });
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || '启动失败');
+
+            // 记录 executionId 以便只接收本次编译的日志。
+            // 响应可能晚于首条日志到达, 故在设置前不清空历史。
+            if (data.executionId) {
+                this.currentExecutionId = data.executionId;
+            }
+            this.processOutputHistory = [];
             this.showStatus('反编译已启动, 日志实时显示在下方', 'success');
         } catch (err) {
             const msg = err.message || String(err);
             this.showStatus('反编译失败: ' + msg, 'error');
             this.addLog('反编译启动失败: ' + msg);
-        } finally {
             this.isProcessing = false;
-            if (btn) {
-                btn.disabled = false;
-                btn.innerHTML = '<i class="fas fa-play"></i> 反编译此包';
-            }
+            this.restoreCompileButton(btn);
+        }
+        // 注意: 成功启动后不重置 isProcessing —— 编译是异步进程,
+        // 由 WebSocket 的 exit 事件负责收尾, 否则按钮会立刻可再次点击。
+    }
+
+    restoreCompileButton(btn) {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-play"></i> 反编译此包';
         }
     }
 
@@ -226,6 +252,12 @@ class WedecodeApp {
 
         const ws = data.workspace || data;
         this.currentWorkspaceId = ws.id;
+
+        // 关键: 服务端按 workspaceId 定向广播。连接建立时订阅的是
+        // 'default'(那时还不知道真实 id), 拿到真实 id 后必须重新订阅,
+        // 否则编译日志一条都收不到。
+        this.subscribeWorkspace();
+
         return ws;
     }
 
@@ -263,18 +295,11 @@ class WedecodeApp {
         
         this.socket = new WebSocket(wsUrl);
         
-        this.socket.onopen = () => {
+this.socket.onopen = () => {
             this.addLog('WebSocket 连接已建立', 'success');
-            
-            // 订阅工作区事件 - 使用当前工作区ID或默认ID
-            const workspaceId = this.currentWorkspace?.id || 'default';
-            this.socket.send(JSON.stringify({
-                type: 'subscribe',
-                workspaceId: workspaceId
-            }));
-            console.log('已发送 subscribe 消息，workspaceId:', workspaceId);
+            this.subscribeWorkspace();
         };
-        
+
         this.socket.onmessage = (event) => {
             try {
                 const data = JSON.parse(event.data);
@@ -299,8 +324,32 @@ class WedecodeApp {
         };
     }
 
+    /**
+     * 订阅工作区事件。
+     *
+     * 服务端按 client.workspaceId 做定向广播, 因此 workspaceId 必须与
+     * 编译时使用的真实 id 一致。连接建立时还不知道真实 id(先发default),
+     * 拿到后需再次调用本方法重新订阅。
+     */
+    subscribeWorkspace() {
+        if (this.socket?.readyState !== 1) return;
+        this.socket.send(JSON.stringify({
+            type: 'subscribe',
+            workspaceId: this.currentWorkspaceId || 'default'
+        }));
+    }
+
     handleWebSocketMessage(data) {
-        if (data.type === 'execution' && data.executionId === this.executionId) {
+        if (data.type !== 'execution') return;
+
+        // 编译走 compile-folder 接口, 其executionId 在响应里返回,
+        // 可能因竞态晚于首条日志到达, 故只在已知时做比对:
+        // 未设置(currentExecutionId 为空)则接收全部 execution 事件。
+        if (this.currentExecutionId && data.executionId !== this.currentExecutionId) {
+            return;
+        }
+
+        {
             if (data.event === 'output') {
                 // 处理不同类型的输出
                 const output = data.data.trim();
@@ -336,18 +385,17 @@ class WedecodeApp {
                 });
                 
                 this.addLog(data.data, 'error');
-            } else if (data.event === 'exit') {
-                console.log('收到 exit 事件，退出码:', data.code); // 添加调试日志
-                
+} else if (data.event === 'exit') {
                 this.isProcessing = false;
-                this.executionId = null;
-                
+                this.currentExecutionId = null;
+                this.restoreCompileButton(document.getElementById('compileScanBtn'));
+
                 if (data.code === 0) {
-                    this.addLog('🎉 反编译完成！', 'success');
+                    this.addLog('反编译完成', 'success');
                     this.showStatus('反编译成功完成', 'success');
-                    this.downloadBtn.disabled = false;
+                    if (this.downloadBtn) this.downloadBtn.disabled = false;
                 } else {
-                    this.addLog(`❌ 反编译失败，退出码: ${data.code}`, 'error');
+                    this.addLog(`反编译失败，退出码: ${data.code}`, 'error');
                     this.showStatus('反编译失败', 'error');
                 }
             }
