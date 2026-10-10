@@ -2,6 +2,7 @@ import path from "node:path";
 import { clearScreen } from "@/utils/common";
 import { glob } from "glob";
 import { SacnPackagesPathItem, ScanPackagesResultInfo } from "@/typings/index";
+import { getAppletIconPath, getAppletIconStats, refreshAppletIconIndex } from "@/utils/wxapp-icon";
 import colors from "picocolors";
 import prompts from "@/bin/wedecode/inquirer";
 import { AppMainPackageNames, globPathList, YesOrNoEnum } from "@/bin/wedecode/enum";
@@ -106,14 +107,22 @@ export async function scanPackagesForDisplay(manualScanPath: string = ''): Promi
     updateDate: string
     description: string
     nameResolved: boolean
+    /** 微信本地缓存中是否存在该小程序的图标 */
+    hasIcon: boolean
   }>
   scannedPathList: string[]
+  /** 图标索引诊断信息, 便于排查「为什么没图标」 */
+  iconStats: { indexed: number; dirs: string[] }
 }> {
   const scanPathList: string[] = manualScanPath.trim()
     ? [path.resolve(manualScanPath)]
     : globPathList
 
   const list = scanPackagesPure(manualScanPath)
+
+  // 建立本地图标索引(纯本地, 不联网)。必须放在扫描之后,
+  // 因为图标目录是从实际扫到的包路径向上推导出来的。
+  refreshAppletIconIndex(list.map(item => item.storagePath))
 
   // 昵称的唯一来源是第三方付费查询接口, 本项目不接入, 故展示名就是 appid。
   // 整个扫描过程纯本地、不发任何网络请求。
@@ -131,13 +140,15 @@ export async function scanPackagesForDisplay(manualScanPath: string = ''): Promi
       appName: item.appId,
       updateDate: `${mtime.getMonth() + 1}/${mtime.getDate()} ${mtime.toLocaleTimeString()}`,
       description: item.storagePath,
-      nameResolved: false
+      nameResolved: false,
+      hasIcon: Boolean(getAppletIconPath(item.appId))
     }
   })
 
   return {
     packages,
-    scannedPathList: scanPathList
+    scannedPathList: scanPathList,
+    iconStats: getAppletIconStats()
   }
 }
 
