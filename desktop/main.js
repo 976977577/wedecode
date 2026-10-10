@@ -130,6 +130,30 @@ function findByShape (mod) {
   )
 }
 
+/**
+ * 渲染进程请求在系统文件管理器中打开目录。
+ *
+ * 安全校验: 只允许打开工作区根目录 (WORKSPACE_ROOT) 之内的路径,
+ * 防止网页侧被注入后借 IPC 打开任意系统目录。
+ */
+ipcMain.handle('open-path', async (event, targetPath) => {
+  if (typeof targetPath !== 'string' || !targetPath) {
+    return { success: false, error: '非法路径' }
+  }
+  const workspacesRoot = path.resolve(process.env.WORKSPACE_ROOT || '')
+  const resolved = path.resolve(targetPath)
+  if (!workspacesRoot || !resolved.startsWith(workspacesRoot + path.sep)) {
+    return { success: false, error: '路径不在工作区目录内' }
+  }
+  if (!fs.existsSync(resolved)) {
+    return { success: false, error: '目录不存在 (反编译可能尚未产出)' }
+  }
+  const errorMessage = await shell.openPath(resolved)
+  return errorMessage
+    ? { success: false, error: errorMessage }
+    : { success: true }
+})
+
 function createWindow (port) {
   const saved = store.get('windowBounds') || { width: 1280, height: 900 }
 

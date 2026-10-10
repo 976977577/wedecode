@@ -12,16 +12,27 @@
             box-sizing: border-box;
         }
 
+        :root {
+            --accent: #5b6cff;
+            --accent-hover: #4a5bf0;
+            --text: #2f3542;
+            --text-secondary: #6b7280;
+            --text-hint: #9aa0ae;
+            --border: #e8eaf2;
+            --bg: #f4f5fa;
+            --danger: #e5484d;
+            --success: #30a46c;
+        }
+
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: #333;
+            background: var(--bg);
+            color: var(--text);
             min-height: 100vh;
             display: flex;
             flex-direction: column;
             align-items: center;
-            justify-content: center;
-            padding: 46px 20px 20px;
+            padding: 52px 20px 24px;
         }
 
         /* macOS Electron: titleBarStyle:hidden 后原生标题栏不可拖,
@@ -37,127 +48,132 @@
         }
 
         /* 交互元素必须显式声明 no-drag, 否则按钮点不动 */
-        .container,
-        .container button,
-        .container input,
-        .container a,
-        .container li,
-        .container .scan-list,
-        .log-container,
-        .modal-content {
+        .app button,
+        .app input,
+        .app a,
+        .app li,
+        .modal-card,
+        .modal-card button {
             -webkit-app-region: no-drag;
         }
 
-        .container {
-            background: white;
-            border-radius: 20px;
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
-            padding: 40px;
-            max-width: 1000px;
+        .app {
             width: 100%;
-            text-align: center;
+            max-width: 760px;
         }
 
-        .header {
-            margin-bottom: 40px;
+        .app-header {
+            text-align: center;
+            margin-bottom: 24px;
         }
 
         .logo {
-            font-size: 2.5em;
+            font-size: 1.7em;
             font-weight: bold;
-            color: #667eea;
-            margin-bottom: 10px;
+            color: var(--accent);
         }
 
         .subtitle {
-            font-size: 1.2em;
-            color: #666;
-            margin-bottom: 30px;
+            margin-top: 6px;
+            color: var(--text-secondary);
+            font-size: 0.95em;
         }
 
-        /* ==================== 本机包扫描 ==================== */
-        .scan-only {
-            margin: 18px 0 22px;
-            border: 1px solid #e6e8ef;
-            border-radius: 14px;
-            overflow: hidden;
-            text-align: left;
+        .card {
             background: #fff;
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            overflow: hidden;
         }
 
+        .hidden {
+            display: none !important;
+        }
+
+        /* ==================== 空态: 扫描入口 ==================== */
+        .empty-card {
+            padding: 56px 32px;
+            text-align: center;
+        }
+
+        .empty-icon {
+            width: 56px;
+            height: 56px;
+            margin: 0 auto 18px;
+            border-radius: 50%;
+            background: #eef0ff;
+            color: var(--accent);
+            font-size: 1.4em;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .empty-title {
+            font-size: 1.15em;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .empty-desc {
+            color: var(--text-secondary);
+            font-size: 0.9em;
+            margin-bottom: 26px;
+        }
+
+        /* ==================== 扫描结果 ==================== */
         .scan-head {
             display: flex;
             align-items: center;
             gap: 10px;
             padding: 14px 18px;
-            background: linear-gradient(180deg, #f7f8fc 0%, #fbfbfd 100%);
-            border-bottom: 1px solid #eceef4;
+            border-bottom: 1px solid var(--border);
+            background: #fafbfd;
         }
 
         .scan-title {
             flex: 1;
-            font-size: 0.98em;
-            font-weight: 500;
-            color: #2f3542;
+            font-size: 0.95em;
+            font-weight: 600;
         }
 
-        .scan-btn {
-            border: 1px solid transparent;
-            background: #fff;
-            color: #4a4f5c;
-            padding: 7px 16px;
-            border-radius: 8px;
-            font-size: 0.86em;
-            font-weight: 500;
-            cursor: pointer;
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            font-family: inherit;
-            white-space: nowrap;
-            transition: background .15s ease, color .15s ease, border-color .15s ease;
+        .scan-title i {
+            color: var(--accent);
+            margin-right: 6px;
         }
 
-        .scan-btn:hover:not(:disabled) {
-            background: #f0f2f8;
-            color: #2f3542;
+        .scan-count {
+            color: var(--text-secondary);
+            font-size: 0.85em;
         }
 
-        .scan-btn:disabled {
-            opacity: .5;
-            cursor: not-allowed;
-        }
-
-        .scan-btn-primary {
-            background: #5b6cff;
-            border-color: #5b6cff;
-            color: #fff;
-            padding: 9px 22px;
-            font-size: 0.9em;
-        }
-
-        .scan-btn-primary:hover:not(:disabled) {
-            background: #4a5bf0;
-            border-color: #4a5bf0;
-            color: #fff;
+        .scan-count strong {
+            color: var(--text);
         }
 
         .scan-body {
-            padding: 0;
             font-size: 0.9em;
         }
 
-        .scan-summary {
-            padding: 12px 18px 8px;
-            color: #6b7280;
+        .scan-notice {
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+            margin: 12px 18px 0;
+            background: #f2f6ff;
+            border: 1px solid #d5e2ff;
+            border-radius: 10px;
+            padding: 10px 13px;
+            color: #43599b;
+            line-height: 1.65;
         }
 
-        .scan-summary strong {
-            color: #2f3542;
+        .scan-notice i {
+            margin-top: 3px;
         }
 
         .scan-hint {
-            margin: 12px 18px;
+            margin: 14px 18px;
             color: #9a6200;
             background: #fff8e8;
             border: 1px solid #ffe3a8;
@@ -174,585 +190,383 @@
         }
 
         .scan-paths {
-            margin: 0 18px 14px;
-            color: #8b90a0;
+            margin: 0 18px 16px;
+            color: var(--text-hint);
             font-size: .92em;
             line-height: 1.8;
             word-break: break-all;
         }
 
-        .scan-notice {
-            display: flex;
-            align-items: flex-start;
-            gap: 8px;
-            margin: 0 18px 12px;
-            background: #f2f6ff;
-            border: 1px solid #d5e2ff;
-            border-radius: 10px;
-            padding: 10px 13px;
-            color: #43599b;
-            line-height: 1.65;
+        .scan-loading {
+            padding: 36px 18px;
+            text-align: center;
+            color: var(--text-hint);
         }
 
-        .scan-notice i {
-            margin-top: 2px;
+        .scan-loading i {
+            color: var(--accent);
+            margin-right: 8px;
+        }
+
+        .pkg-list {
+            list-style: none;
+            padding: 8px;
+        }
+
+        .pkg-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 12px;
+            border-radius: 12px;
+            transition: background .12s ease;
+        }
+
+        .pkg-row:hover {
+            background: #f7f8fc;
+        }
+
+        .pkg-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: 10px;
+            background: #eef0ff;
+            color: var(--accent);
+            font-size: 0.9em;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            overflow: hidden;
+        }
+
+        .pkg-main {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .pkg-name {
+            font-weight: 500;
+            margin-bottom: 2px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }
 
         .name-tag {
             display: inline-block;
-            margin-left: 8px;
+            margin-left: 6px;
             padding: 1px 7px;
             border-radius: 20px;
             background: #f0f1f5;
-            color: #9aa0ae;
-            font-size: .78em;
+            color: var(--text-hint);
+            font-size: .76em;
             font-weight: 400;
             vertical-align: middle;
         }
 
-        /* ---- 包列表 ---- */
-        .scan-list {
-            list-style: none;
-            max-height: 280px;
-            overflow-y: auto;
-            border-top: 1px solid #f0f1f5;
-        }
-
-        .scan-list-item {
-            position: relative;
-            display: flex;
-            align-items: center;
-            gap: 14px;
-            padding: 11px 18px;
-            border-bottom: 1px solid #f5f6f9;
-            cursor: pointer;
-            transition: background .12s ease;
-        }
-
-        .scan-list-item:last-child {
-            border-bottom: none;
-        }
-
-        .scan-list-item::before {
-            content: '';
-            position: absolute;
-            left: 0;
-            top: 0;
-            bottom: 0;
-            width: 3px;
-            background: transparent;
-            transition: background .12s ease;
-        }
-
-        .scan-list-item:hover {
-            background: #fafbfd;
-        }
-
-        .scan-list-item.selected {
-            background: #f4f6ff;
-        }
-
-        .scan-list-item.selected::before {
-            background: #5b6cff;
-        }
-
-        .scan-item-main {
-            flex: 1;
-            min-width: 0;
-        }
-
-        .scan-item-name {
-            color: #2f3542;
-            font-weight: 500;
-            margin-bottom: 2px;
+        .pkg-meta {
+            color: var(--text-hint);
+            font-size: .84em;
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
         }
 
-        .scan-item-meta {
-            color: #9aa0ae;
-            font-size: .88em;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-        }
-
-        .scan-item-date {
-            color: #9aa0ae;
-            font-size: .86em;
-            white-space: nowrap;
-            flex: 0 0 auto;
-        }
-
-        /* ---- 选中后的操作条 ---- */
-        .scan-selected-tip {
-            display: none;
-            align-items: center;
-            gap: 16px;
-            padding: 12px 18px;
-            border-top: 1px solid #e9ebf2;
-            background: #fbfbfe;
-        }
-
-        .scan-picked {
-            flex: 1;
-            min-width: 0;
-        }
-
-        .scan-picked-label {
-            font-size: .78em;
-            color: #9aa0ae;
-            margin-bottom: 2px;
-        }
-
-        .scan-picked-name {
-            color: #2f3542;
-            font-weight: 500;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-        }
-
-        .scan-picked-path {
-            color: #9aa0ae;
-            font-size: .82em;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-            direction: rtl;
-            text-align: left;
-        }
-
-        .buttons {
-            display: flex;
-            gap: 20px;
-            justify-content: center;
-            margin-bottom: 30px;
-        }
-
-        .btn {
-            padding: 15px 30px;
-            border: none;
-            border-radius: 10px;
-            font-size: 1.1em;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s ease;
+        .pkg-side {
             display: flex;
             align-items: center;
             gap: 10px;
-            text-decoration: none;
-        }
-
-        .btn-primary {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-        }
-
-        .btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
-        }
-
-        .btn-secondary {
-            background: #f8f9fa;
-            color: #333;
-            border: 2px solid #dee2e6;
-        }
-
-        .btn-secondary:hover {
-            background: #e9ecef;
-            transform: translateY(-2px);
-        }
-
-        .btn:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-            transform: none !important;
-        }
-
-        .status {
-            margin: 20px 0;
-            padding: 15px;
-            border-radius: 10px;
-            font-weight: 600;
-        }
-
-        .status.processing {
-            background: #fff3cd;
-            color: #856404;
-            border: 1px solid #ffeaa7;
-        }
-
-        .status.success {
-            background: #d4edda;
-            color: #155724;
-            border: 1px solid #c3e6cb;
-        }
-
-        .status.error {
-            background: #f8d7da;
-            color: #721c24;
-            border: 1px solid #f5c6cb;
-        }
-
-        .hidden {
-            display: none;
-        }
-
-        .spinner {
-            display: inline-block;
-            width: 20px;
-            height: 20px;
-            border: 3px solid #f3f3f3;
-            border-top: 3px solid #667eea;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-        }
-
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-
-        .progress-container {
-            margin: 20px 0;
-            padding: 20px;
-            background: #f8f9ff;
-            border-radius: 10px;
-            border: 1px solid #e0e6ff;
-        }
-
-        .progress-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 10px;
-            font-weight: 600;
-            color: #333;
-        }
-
-        .progress-bar {
-            width: 100%;
-            height: 8px;
-            background: #e0e6ff;
-            border-radius: 4px;
-            overflow: hidden;
-            margin-bottom: 10px;
-        }
-
-        .progress-fill {
-            height: 100%;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            border-radius: 4px;
-            transition: width 0.3s ease;
-            width: 0%;
-        }
-
-        .progress-details {
-            font-size: 0.9em;
-            color: #666;
-            text-align: left;
-        }
-
-        .log-container {
-            background: #1e1e1e;
-            border-radius: 10px;
-            margin-top: 20px;
-            max-height: 500px;
-            text-align: left;
-            display: flex;
-            flex-direction: column;
-        }
-
-        .log-header {
-            color: #fff;
-            font-weight: bold;
-            padding: 20px 20px 15px 20px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            border-bottom: 1px solid #333;
-            background: #1e1e1e;
-            border-radius: 10px 10px 0 0;
             flex-shrink: 0;
         }
 
-        .log-content {
-            font-family: 'Courier New', monospace;
-            font-size: 0.9em;
-            line-height: 1.4;
-            color: #d4d4d4;
-            white-space: pre-wrap;
-            word-break: break-all;
-            padding: 0 20px 20px 20px;
-            overflow-y: auto;
-            flex: 1;
-        }
-
-        .log-line {
-            margin-bottom: 5px;
-            padding: 2px 0;
-        }
-
-        .log-line.info {
-            color: #ffffff;
-        }
-
-        .log-line.success {
-            color: #ffffff;
-        }
-
-        .log-line.warning {
-            color: #ffb74d;
-        }
-
-        .log-line.error {
-            color: #e57373;
-        }
-
-        .log-line.debug {
-            color: #9e9e9e;
-        }
-
-        .footer {
-            margin-top: 30px;
-            color: #666;
-            font-size: 0.9em;
-        }
-
-        /* 模态框样式 */
-        .modal {
+        /* 状态角标: 编译中/完成/失败, 点击可重开日志窗 */
+        .pkg-badge {
+            width: 26px;
+            height: 26px;
+            border-radius: 50%;
             display: none;
-            position: fixed;
-            z-index: 1000;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.5);
+            align-items: center;
+            justify-content: center;
+            font-size: .72em;
+            cursor: pointer;
+            border: 1px solid transparent;
         }
 
-        .modal-content {
-            background-color: #fff;
-            margin: 3% auto;
-            padding: 0;
-            border-radius: 15px;
-            width: 90%;
-            max-width: 800px;
-            max-height: 90vh;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+        .pkg-badge.show {
+            display: flex;
+        }
+
+        .pkg-badge.running {
+            color: var(--accent);
+            background: #eef0ff;
+        }
+
+        .pkg-badge.success {
+            color: var(--success);
+            background: #e7f6ee;
+            border-color: #c9ecd9;
+        }
+
+        .pkg-badge.error {
+            color: var(--danger);
+            background: #fdebec;
+            border-color: #f7cfd1;
+        }
+
+        /* ==================== 按钮 ==================== */
+        .btn-primary {
+            border: none;
+            background: var(--accent);
+            color: #fff;
+            padding: 10px 26px;
+            border-radius: 10px;
+            font-size: 1em;
+            font-weight: 600;
+            cursor: pointer;
+            font-family: inherit;
+            transition: background .15s ease;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            background: var(--accent-hover);
+        }
+
+        .btn-primary:disabled {
+            opacity: .5;
+            cursor: not-allowed;
+        }
+
+        .btn-sm {
+            padding: 7px 16px;
+            font-size: .86em;
+            border-radius: 8px;
+        }
+
+        .btn-ghost {
+            border: 1px solid var(--border);
+            background: #fff;
+            color: var(--text-secondary);
+            padding: 7px 14px;
+            border-radius: 8px;
+            font-size: .84em;
+            cursor: pointer;
+            font-family: inherit;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            transition: background .15s ease, color .15s ease;
+        }
+
+        .btn-ghost:hover:not(:disabled) {
+            background: #f0f2f8;
+            color: var(--text);
+        }
+
+        .btn-ghost:disabled {
+            opacity: .5;
+            cursor: not-allowed;
+        }
+
+        .app-footer {
+            margin-top: 28px;
+            color: var(--text-hint);
+            font-size: .78em;
+            text-align: center;
+            line-height: 1.8;
+        }
+
+        /* ==================== 日志弹窗 ==================== */
+        .modal {
+            position: fixed;
+            inset: 0;
+            z-index: 1000;
+            background: rgba(15, 18, 35, .45);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+        }
+
+        .modal-card {
+            background: #fff;
+            border-radius: 16px;
+            width: 100%;
+            max-width: 780px;
+            max-height: 86vh;
             display: flex;
             flex-direction: column;
+            overflow: hidden;
         }
 
-        .modal-header {
-            padding: 20px;
-            border-bottom: 1px solid #eee;
+        .modal-head {
             display: flex;
-            justify-content: space-between;
             align-items: center;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border-radius: 15px 15px 0 0;
+            gap: 10px;
+            padding: 14px 18px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .status-dot {
+            width: 9px;
+            height: 9px;
+            border-radius: 50%;
+            background: #f0b429;
+            flex-shrink: 0;
+        }
+
+        .status-dot.running {
+            background: #f0b429;
+            animation: pulse 1.2s ease infinite;
+        }
+
+        .status-dot.success {
+            background: var(--success);
+        }
+
+        .status-dot.error {
+            background: var(--danger);
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: .35; }
         }
 
         .modal-title {
-            font-size: 1.2em;
+            flex: 1;
+            min-width: 0;
             font-weight: 600;
+            font-size: .98em;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }
 
-        .modal-actions {
-            display: flex;
-            align-items: center;
-        }
-
-        .close {
-            color: white;
-            font-size: 28px;
-            font-weight: bold;
+        .modal-close {
+            border: none;
+            background: none;
+            color: var(--text-hint);
+            font-size: 1.25em;
             cursor: pointer;
             line-height: 1;
+            padding: 2px 4px;
         }
 
-        .close:hover {
-            opacity: 0.7;
+        .modal-close:hover {
+            color: var(--text);
         }
 
-        .modal-body {
-            padding: 20px;
-            flex: 1;
+        .log-view {
+            background: #1e2230;
+            min-height: 280px;
+            height: 52vh;
             overflow-y: auto;
-        }
-
-        .full-log-content {
-            background: #1e1e1e;
-            color: #d4d4d4;
-            padding: 15px;
-            border-radius: 8px;
+            padding: 14px 18px;
             font-family: 'Courier New', monospace;
-            font-size: 0.9em;
-            line-height: 1.4;
+            font-size: .84em;
+            line-height: 1.55;
+            color: #d4d7e4;
             white-space: pre-wrap;
-            word-wrap: break-word;
-            max-height: 600px;
-            overflow-y: auto;
-            border: 1px solid #333;
+            word-break: break-all;
         }
 
-        @media (max-width: 768px) {
-            
-            .container {
-                padding: 20px;
-            }
-            
-            .buttons {
+        .log-line {
+            margin-bottom: 4px;
+        }
+
+        .log-line.success { color: #7be0a8; }
+        .log-line.warning { color: #ffcb6b; }
+        .log-line.error   { color: #ff8a8a; }
+        .log-line.info    { color: #d4d7e4; }
+
+        .modal-foot {
+            display: flex;
+            gap: 10px;
+            padding: 14px 18px;
+            border-top: 1px solid var(--border);
+        }
+
+        .modal-foot .btn-primary {
+            flex: 1;
+        }
+
+        .modal-foot .btn-ghost {
+            flex: 1;
+            justify-content: center;
+            font-size: .92em;
+            padding: 10px 0;
+        }
+
+        @media (max-width: 600px) {
+            .pkg-side {
                 flex-direction: column;
-                align-items: center;
+                gap: 6px;
             }
 
-            .modal-content {
-                width: 95%;
-                margin: 10% auto;
+            .modal {
+                padding: 12px;
             }
         }
     </style>
 </head>
 <body>
     <div class="drag-strip"></div>
-    <div class="container">
-        <div class="header">
-            <div class="logo">
-                <i class="fas fa-code"></i> Wedecode
-            </div>
+    <div class="app">
+        <header class="app-header">
+            <div class="logo"><i class="fas fa-code"></i> Wedecode</div>
             <div class="subtitle">微信小程序反编译工具</div>
-        </div>
+        </header>
 
-        <!-- 主区: 仅保留本机包扫描 -->
-        <div class="scan-only">
+        <!-- 状态 1: 空态, 只有扫描入口 -->
+        <section id="emptyState" class="card empty-card">
+            <div class="empty-icon"><i class="fas fa-magnifying-glass"></i></div>
+            <div class="empty-title">扫描本机小程序包</div>
+            <div class="empty-desc">自动查找微信在本机缓存的小程序 / 小游戏包，反编译后可查看源码</div>
+            <button type="button" id="scanEntryBtn" class="btn-primary">
+                <i class="fas fa-radar"></i> 开始扫描
+            </button>
+        </section>
+
+        <!-- 状态 2: 扫描结果列表 -->
+        <section id="scanSection" class="card hidden">
             <div class="scan-head">
-                <i class="fas fa-magnifying-glass" style="color:#667eea;"></i>
-                <span class="scan-title">扫描本机小程序包</span>
-                <button type="button" class="scan-btn" id="scanBtn">
-                    <i class="fas fa-radar"></i> 开始扫描
+                <span class="scan-title"><i class="fas fa-list-check"></i>扫描结果</span>
+                <span class="scan-count" id="scanCount"></span>
+                <button type="button" class="btn-ghost" id="rescanBtn">
+                    <i class="fas fa-rotate"></i> 重新扫描
                 </button>
             </div>
-            <div class="scan-body" id="scanBody" style="display:none;"></div>
-        </div>
+            <div class="scan-body" id="scanBody"></div>
+        </section>
 
-        <div class="buttons">
-            <button class="btn btn-secondary" id="downloadBtn" disabled>
-                <i class="fas fa-download"></i>
-                下载结果
-            </button>
-            <button class="btn btn-secondary" id="viewFullLogBtn" disabled>
-                <i class="fas fa-file-alt"></i>
-                查看完整日志
-            </button>
-        </div>
+        <footer class="app-footer">
+            支持小程序 / 小游戏 · 分包与插件还原 · JS / WXML / WXSS / WXS / JSON<br>
+            仅限线上代码安全审计与学习用途，请遵守法律法规
+        </footer>
+    </div>
 
-        <div id="status" class="status hidden"></div>
-        
-        <div id="progressContainer" class="progress-container hidden">
-            <div class="progress-header">
-                <span id="progressText">上传进度</span>
-                <span id="progressPercent">0%</span>
-            </div>
-            <div class="progress-bar">
-                <div id="progressFill" class="progress-fill"></div>
-            </div>
-            <div id="progressDetails" class="progress-details"></div>
-        </div>
-
-        <div class="log-container">
-            <div class="log-header">
-                <i class="fas fa-terminal"></i>
-                反编译日志
-                <button class="btn btn-secondary" id="clearLogBtn" style="margin-left: auto; padding: 5px 10px; font-size: 0.8em;">
-                    <i class="fas fa-trash"></i>
-                    清空
+    <!-- 状态 3: 反编译日志弹窗 -->
+    <div id="logModal" class="modal hidden">
+        <div class="modal-card">
+            <div class="modal-head">
+                <span class="status-dot running" id="logStatusDot"></span>
+                <div class="modal-title" id="logTitle">反编译日志</div>
+                <button type="button" class="btn-ghost" id="copyLogBtn">
+                    <i class="fas fa-copy"></i> 复制
                 </button>
+                <button type="button" class="modal-close" id="closeLogBtn">&times;</button>
             </div>
-            <div class="log-content" id="logContent">
-            </div>
-        </div>
-
-        <div class="footer">
-            <p>支持微信小程序和小游戏反编译 | 完美还原源代码结构</p>
-            <p style="margin-top: 10px; font-size: 0.8em;">
-                支持功能：JS/WXML/WXSS/WXS/JSON 代码还原 | 分包代码还原 | 媒体资源还原
-            </p>
-        </div>
-    </div>
-
-    <!-- 完整日志模态框 -->
-    <div id="logModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <div class="modal-title">
-                    <i class="fas fa-file-alt"></i>
-                    完整反编译日志
-                </div>
-                <div class="modal-actions">
-                    <button class="btn btn-secondary" id="copyLogBtn" style="margin-right: 10px; padding: 5px 10px; font-size: 0.8em;">
-                        <i class="fas fa-copy"></i>
-                        复制日志
-                    </button>
-                    <span class="close" id="closeModal">&times;</span>
-                </div>
-            </div>
-            <div class="modal-body">
-                <div class="full-log-content" id="fullLogContent">
-                    暂无日志内容
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- 文件夹编译模态框 -->
-    <div id="folderCompileModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <div class="modal-title">
-                    <i class="fas fa-folder-open"></i>
-                    文件夹编译设置
-                </div>
-                <div class="modal-actions">
-                    <span class="close" id="closeFolderModal">&times;</span>
-                </div>
-            </div>
-            <div class="modal-body">
-                <div style="text-align: left; margin-bottom: 20px;">
-                    <label for="folderPath" style="display: block; margin-bottom: 8px; font-weight: bold;">
-                        <i class="fas fa-folder"></i> 文件夹路径：
-                    </label>
-                    <input type="text" id="folderPath" placeholder="请输入包含.wxapkg文件的文件夹路径" 
-                           style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px; font-size: 14px;">
-                    <div style="margin-top: 8px; font-size: 12px; color: #666;">
-                        例如：/Users/username/Desktop/wxapkg_files
-                    </div>
-                </div>
-                
-                <div style="text-align: left; margin-bottom: 20px;">
-                    <label style="display: block; margin-bottom: 8px; font-weight: bold;">
-                        <i class="fas fa-cog"></i> 编译选项：
-                    </label>
-                    <div style="margin-bottom: 10px;">
-                        <label style="display: flex; align-items: center; margin-bottom: 8px;">
-                            <input type="checkbox" id="folderUsePx" style="margin-right: 8px;">
-                            <span>使用像素单位 (--px)</span>
-                        </label>
-                        <label style="display: flex; align-items: center; margin-bottom: 8px;">
-                            <input type="checkbox" id="folderUnpackOnly" style="margin-right: 8px;">
-                            <span>仅解包模式 (--unpack-only)</span>
-                        </label>
-                    </div>
-
-                </div>
-                
-                <div style="text-align: center;">
-                </div>
+            <div class="log-view" id="logView"></div>
+            <!-- 编译成功后才出现的产物操作区 -->
+            <div class="modal-foot hidden" id="logFooter">
+                <button type="button" class="btn-primary" id="openDirBtn">
+                    <i class="fas fa-folder-open"></i> 打开产物目录
+                </button>
+                <button type="button" class="btn-ghost" id="downloadZipBtn">
+                    <i class="fas fa-download"></i> 下载 zip
+                </button>
             </div>
         </div>
     </div>

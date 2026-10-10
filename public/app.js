@@ -1,86 +1,133 @@
+/**
+ * Wedecode 可视化界面
+ *
+ * 三状态设计:
+ * 1. 空态     —— 只有扫描入口
+ * 2. 结果列表 —— 每行一个包, 直接点「反编译」
+ * 3. 日志弹窗 —— 点反编译后弹出, 实时显示编译过程;
+ *               编译中关闭弹窗则后台继续, 列表行角标显示状态,
+ *               点角标可随时重开日志窗回看 (日志按 executionId 缓存)。
+ */
 class WedecodeApp {
     constructor() {
-        this.currentWorkspaceId = null;
-        this.selectedFiles = [];
+        this.packages = [];          // 扫描到的小程序包
+        this.rowRefs = [];           // 每行 DOM 引用 { row, badge, compileBtn, session }
+
+        this.workspaceId = null;
+        this.workspacePath = null;
         this.socket = null;
-        this.executionId = null;
-        this.isProcessing = false;
-        this.fullLogHistory = []; // 存储完整日志历史
-        this.processOutputHistory = []; // 存储反编译进程的详细输出
-        this.scanPackages = []; // 扫描到的小程序包
-        this.selectedScanPackage = null; // 用户选中的扫描包
-        
-        this.initializeElements();
-        this.setupEventListeners();
+
+        // 一次只允许一个编译任务 (后端多个执行共用同一 OUTPUT 目录, 并发会互相覆盖产物)
+        this.isCompiling = false;
+        this.isScanning = false;
+
+        // executionId -> session { status, lines, pkgIndex, pkgName, executionId }
+        this.sessions = new Map();
+        // HTTP 响应到达前的日志缓冲 (服务端日志可能先于响应返回)
+        this.pendingSession = null;
+
+        this.modalSession = null;    // 当前日志弹窗展示的 session
+
+        this.initElements();
+        this.bindEvents();
         this.connectWebSocket();
+
+        // 非桌面版 (浏览器访问) 没有 shell.openPath, 隐藏「打开产物目录」
+        if (!window.wedecodeDesktop?.openPath) {
+            this.openDirBtn?.classList.add('hidden');
+        }
     }
 
-    initializeElements() {
-        this.downloadBtn = document.getElementById('downloadBtn');
-        this.viewFullLogBtn = document.getElementById('viewFullLogBtn');
-        this.status = document.getElementById('status');
-        this.logContent = document.getElementById('logContent');
-        this.clearLogBtn = document.getElementById('clearLogBtn');
+    initElements() {
+        // 空态
+        this.emptyState = document.getElementById('emptyState');
+        this.scanEntryBtn = document.getElementById('scanEntryBtn');
 
-        // 本机包扫描
-        this.scanBtn = document.getElementById('scanBtn');
+        // 扫描结果
+        this.scanSection = document.getElementById('scanSection');
         this.scanBody = document.getElementById('scanBody');
+        this.scanCount = document.getElementById('scanCount');
+        this.rescanBtn = document.getElementById('rescanBtn');
 
-        // 日志模态框
+        // 日志弹窗
         this.logModal = document.getElementById('logModal');
-        this.closeModal = document.getElementById('closeModal');
-        this.fullLogContent = document.getElementById('fullLogContent');
+        this.logStatusDot = document.getElementById('logStatusDot');
+        this.logTitle = document.getElementById('logTitle');
+        this.logView = document.getElementById('logView');
         this.copyLogBtn = document.getElementById('copyLogBtn');
-
-        // 进度显示
-        this.progressContainer = document.getElementById('progressContainer');
-        this.progressText = document.getElementById('progressText');
-        this.progressPercent = document.getElementById('progressPercent');
-        this.progressFill = document.getElementById('progressFill');
-        this.progressDetails = document.getElementById('progressDetails');
+        this.closeLogBtn = document.getElementById('closeLogBtn');
+        this.logFooter = document.getElementById('logFooter');
+        this.openDirBtn = document.getElementById('openDirBtn');
+        this.downloadZipBtn = document.getElementById('downloadZipBtn');
     }
 
+    bindEvents() {
+        this.scanEntryBtn?.addEventListener('click', () => this.handleScan());
+        this.rescanBtn?.addEventListener('click', () => this.handleScan());
 
+        // 日志弹窗: 关闭 = 后台继续编译, 不终止
+        this.closeLogBtn?.addEventListener('click', () => this.closeLogModal());
+        this.logModal?.addEventListener('click', (e) => {
+            if (e.target === this.logModal) this.closeLogModal();
+        });
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && !this.logModal.classList.contains('hidden')) {
+                this.closeLogModal();
+            }
+        });
+
+        this.copyLogBtn?.addEventListener('click', () => this.copyCurrentLog());
+        this.openDirBtn?.addEventListener('click', () => this.openOutputDir());
+        this.downloadZipBtn?.addEventListener('click', () => this.downloadZip());
+    }
+
+    /* ==================== 扫描 ==================== */
 
     /**
-     * 扫描本机已安装的小程序包
-     *
-     * 调用 GET /api/scan, 该接口是纯查询: 不弹终端提示、不修改任何文件。
+     * 扫描本机已安装的小程序包。GET /api/scan 为纯查询, 无副作用。
      */
     async handleScan() {
         if (this.isScanning) return;
         this.isScanning = true;
-        this.scanBtn.disabled = true;
-        this.scanBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 扫描中...';
-        this.scanBody.style.display = 'block';
-        this.scanBody.innerHTML = '<div style="color:#888;">正在扫描本机小程序缓存，请稍候...</div>';
+
+        this.scanEntryBtn.disabled = true;
+        this.rescanBtn.disabled = true;
+        this.emptyState.classList.add('hidden'); // 首次扫描后空态永久退场
+        this.scanSection.classList.remove('hidden');
+        this.scanCount.textContent = '';
+        this.scanBody.innerHTML = `
+            <div class="scan-loading"><i class="fas fa-spinner fa-spin"></i>正在扫描本机小程序缓存, 请稍候...</div>
+        `;
 
         try {
             const res = await fetch('/api/scan');
             const data = await res.json();
-
             if (!res.ok || !data.success) {
                 this.renderScanError(data.message || data.error || '扫描失败');
                 return;
             }
-            this.scanPackages = data.packages || [];
-            this.selectedScanPackage = null;
+            this.packages = data.packages || [];
             this.renderScanResult(data);
         } catch (err) {
             this.renderScanError(err.message || String(err));
         } finally {
             this.isScanning = false;
-            this.scanBtn.disabled = false;
-            this.scanBtn.innerHTML = '<i class="fas fa-radar"></i> 开始扫描';
+            this.scanEntryBtn.disabled = false;
+            this.rescanBtn.disabled = false;
         }
     }
 
     renderScanError(message) {
-        this.scanBody.innerHTML = `<div class="scan-hint">扫描失败: ${this.escapeHtml(message)}</div>`;
+        this.packages = [];
+        this.rowRefs = [];
+        this.scanCount.textContent = '';
+        this.scanBody.innerHTML = `
+            <div class="scan-hint">扫描失败: ${this.escapeHtml(message)}</div>
+        `;
     }
 
     renderScanResult(data) {
-        const packages = this.scanPackages;
+        const packages = this.packages;
         const pathList = data.scannedPathList || [];
 
         if (!packages.length) {
@@ -88,6 +135,8 @@ class WedecodeApp {
             const pathsHtml = pathList.length
                 ? `<div class="scan-paths">已查找:<br>${pathList.map(p => `<code>${this.escapeHtml(p)}</code>`).join('<br>')}</div>`
                 : '';
+            this.rowRefs = [];
+            this.scanCount.textContent = '';
             this.scanBody.innerHTML = `
                 <div class="scan-hint">
                     ${this.escapeHtml(data.hint || '未找到小程序包')}
@@ -100,45 +149,60 @@ class WedecodeApp {
             return;
         }
 
-        const items = packages.map((pkg, index) => `
-            <li class="scan-list-item" data-scan-index="${index}">
-                <div class="scan-item-main">
-                    <div class="scan-item-name">
-                        ${this.escapeHtml(pkg.appName || pkg.appId)}
-                        ${pkg.isAppId && !pkg.nameResolved
-                            ? '<span class="name-tag">仅 appid</span>' : ''}
-                    </div>
-                    <div class="scan-item-meta">${this.escapeHtml(this.shortPath(pkg.storagePath))}</div>
-                </div>
-                <div class="scan-item-date">${this.escapeHtml(pkg.updateDate)}</div>
-            </li>
-        `).join('');
-
         // 昵称只能由第三方接口提供, 该接口挂了就把原因说清楚,
-        // 否则用户会对着满屏appid 不知道出了什么问题
+        // 否则用户会对着满屏 appid 不知道出了什么问题
         const nameNotice = data.nameLookupFailed ? `
             <div class="scan-notice">
                 <i class="fas fa-info-circle"></i>
-                小程序名称需联网查询,但该服务当前不可用(疑似被防护策略拦截),因此仅显示 appid。
-                这不影响反编译功能。
+                <span>小程序名称需联网查询, 但该服务当前不可用(疑似被防护策略拦截), 因此仅显示 appid。这不影响反编译功能。</span>
             </div>
         ` : '';
 
+        const items = packages.map((pkg, index) => {
+            const name = pkg.appName || pkg.appId;
+            const iconText = pkg.nameResolved ? String(name).slice(0, 1) : 'wx';
+            return `
+            <li class="pkg-row">
+                <div class="pkg-icon">${this.escapeHtml(iconText)}</div>
+                <div class="pkg-main">
+                    <div class="pkg-name">
+                        ${this.escapeHtml(name)}
+                        ${pkg.isAppId && !pkg.nameResolved ? '<span class="name-tag">仅 appid</span>' : ''}
+                    </div>
+                    <div class="pkg-meta" title="${this.escapeHtml(pkg.storagePath)}">${this.escapeHtml(this.shortPath(pkg.storagePath))} · ${this.escapeHtml(pkg.updateDate)}</div>
+                </div>
+                <div class="pkg-side">
+                    <span class="pkg-badge" title="点击查看反编译日志"></span>
+                    <button type="button" class="btn-primary btn-sm compile-btn">
+                        <i class="fas fa-play"></i> 反编译
+                    </button>
+                </div>
+            </li>
+            `;
+        }).join('');
+
+        this.scanCount.innerHTML = `找到 <strong>${packages.length}</strong> 个包`;
         this.scanBody.innerHTML = `
-            <div class="scan-summary">找到 <strong>${packages.length}</strong> 个小程序包,点击一项即可反编译</div>
             ${nameNotice}
-            <ul class="scan-list" id="scanList">${items}</ul>
-            <div class="scan-selected-tip" id="scanSelectedTip" style="display:none;"></div>
+            <ul class="pkg-list">${items}</ul>
         `;
 
-        this.scanBody.querySelectorAll('.scan-list-item').forEach(el => {
-            el.addEventListener('click', () => this.selectScanPackage(Number(el.dataset.scanIndex), el));
+        // 收集行内元素引用, 后续只更新角标, 不整块重绘
+        this.rowRefs = Array.from(this.scanBody.querySelectorAll('.pkg-row')).map((row, index) => {
+            const badge = row.querySelector('.pkg-badge');
+            const compileBtn = row.querySelector('.compile-btn');
+            compileBtn.addEventListener('click', () => this.startCompile(index));
+            badge.addEventListener('click', () => {
+                const session = this.rowRefs[index]?.session;
+                if (session) this.openLogModal(session);
+            });
+            return { row, badge, compileBtn, session: null };
         });
     }
 
     /**
-     * 路径太长会挤掉日期列, 这里只保留末两段(appid / packages),
-     * 完整路径在选中后仍会展示。
+     * 路径太长会挤掉时间列, 列表里只保留末两段 (appid / packages),
+     * 完整路径放在 title 悬浮提示里。
      */
     shortPath(fullPath, keep = 2) {
         if (!fullPath) return '';
@@ -147,55 +211,28 @@ class WedecodeApp {
         return '…/' + parts.slice(-keep).join('/');
     }
 
-    selectScanPackage(index, el) {
-        const pkg = this.scanPackages[index];
-        if (!pkg) return;
-        this.selectedScanPackage = pkg;
+    /* ==================== 反编译 ==================== */
 
-        this.scanBody.querySelectorAll('.scan-list-item').forEach(n => n.classList.remove('selected'));
-        el.classList.add('selected');
+    async startCompile(index) {
+        const pkg = this.packages[index];
+        const ref = this.rowRefs[index];
+        if (!pkg || !ref || this.isCompiling) return;
 
-        const tip = document.getElementById('scanSelectedTip');
-        tip.style.display = 'flex';
-        tip.innerHTML = `
-            <div class="scan-picked">
-                <div class="scan-picked-label">已选择</div>
-                <div class="scan-picked-main">
-                    <div class="scan-picked-name">${this.escapeHtml(pkg.appName || pkg.appId)}</div>
-                    <div class="scan-picked-path" title="${this.escapeHtml(pkg.storagePath)}">${this.escapeHtml(pkg.storagePath)}</div>
-                </div>
-            </div>
-            <button type="button" class="scan-btn scan-btn-primary" id="compileScanBtn">
-                <i class="fas fa-play"></i> 反编译
-            </button>
-        `;
+        this.isCompiling = true;
+        this.setCompileUI(true);
 
-        // 按钮每次选中都会重建, 需重新绑定
-        const btn = document.getElementById('compileScanBtn');
-        btn?.addEventListener('click', () => this.compileSelectedPackage());
-    }
-
-    /**
-     * 反编译选中的扫描包。
-     *
-     * 走 compile-folder 接口直接编译本机目录 —— 扫描出的包本来就在磁盘上,
-     * 不需要像上传流程那样先传给服务端。
-     */
-    async compileSelectedPackage() {
-        const pkg = this.selectedScanPackage;
-        if (!pkg) {
-            this.showStatus('请先点击选择一个要反编译的小程序包', 'warning');
-            return;
-        }
-        if (this.isProcessing) return;
-
-        this.isProcessing = true;
-        const btn = document.getElementById('compileScanBtn');
-        if (btn) {
-            btn.disabled = true;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 反编译中...';
-        }
-        this.showStatus('正在启动反编译...', 'info');
+        // 编译会话先建立, HTTP 响应回来前收到的日志先缓冲在 session 里
+        const session = {
+            status: 'running',
+            lines: [],
+            pkgIndex: index,
+            pkgName: pkg.appName || pkg.appId,
+            executionId: null
+        };
+        ref.session = session;
+        this.pendingSession = session;
+        this.setBadge(ref, 'running');
+        this.openLogModal(session);
 
         try {
             const workspace = await this.ensureWorkspace();
@@ -207,36 +244,302 @@ class WedecodeApp {
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || '启动失败');
 
-            // 记录 executionId 以便只接收本次编译的日志。
-            // 响应可能晚于首条日志到达, 故在设置前不清空历史。
             if (data.executionId) {
-                this.currentExecutionId = data.executionId;
+                session.executionId = data.executionId;
+                this.sessions.set(data.executionId, session);
             }
-            this.processOutputHistory = [];
-            this.showStatus('反编译已启动, 日志实时显示在下方', 'success');
+            // 编译是异步子进程, 收尾由 WebSocket 的 exit 事件负责
         } catch (err) {
             const msg = err.message || String(err);
-            this.showStatus('反编译失败: ' + msg, 'error');
-            this.addLog('反编译启动失败: ' + msg);
-            this.isProcessing = false;
-            this.restoreCompileButton(btn);
-        }
-        // 注意: 成功启动后不重置 isProcessing —— 编译是异步进程,
-        // 由 WebSocket 的 exit 事件负责收尾, 否则按钮会立刻可再次点击。
-    }
-
-    restoreCompileButton(btn) {
-        if (btn) {
-            btn.disabled = false;
-            btn.innerHTML = '<i class="fas fa-play"></i> 反编译此包';
+            session.status = 'error';
+            session.executionId = null;
+            this.appendLog(session, '反编译启动失败: ' + msg, 'error');
+            this.finishCompile(session, 'error');
+        } finally {
+            this.pendingSession = null;
         }
     }
 
     /**
-     * 复用或创建工作区(反编译产物按工作区隔离存放)
+     * 编译结束 (成功/失败/启动失败) 的统一收尾。
+     */
+    finishCompile(session, status) {
+        this.isCompiling = false;
+        this.setCompileUI(false);
+
+        const ref = this.rowRefs[session.pkgIndex];
+        if (ref) this.setBadge(ref, status);
+
+        // 弹窗如果正展示该 session, 刷新头部状态与产物操作区
+        if (this.modalSession === session) {
+            this.refreshModalChrome();
+        }
+    }
+
+    setCompileUI(compiling) {
+        this.rowRefs.forEach(ref => { if (ref) ref.compileBtn.disabled = compiling; });
+        this.rescanBtn.disabled = compiling; // 重扫会重绘列表、丢失角标, 编译中禁用
+    }
+
+    setBadge(ref, status) {
+        if (!ref?.badge) return;
+        const icons = {
+            running: '<i class="fas fa-spinner fa-spin"></i>',
+            success: '<i class="fas fa-check"></i>',
+            error: '<i class="fas fa-xmark"></i>'
+        };
+        const titles = {
+            running: '反编译进行中, 点击查看日志',
+            success: '反编译完成, 点击查看日志',
+            error: '反编译失败, 点击查看日志'
+        };
+        ref.badge.className = `pkg-badge show ${status}`;
+        ref.badge.innerHTML = icons[status] || '';
+        ref.badge.title = titles[status] || '';
+    }
+
+    /* ==================== 日志弹窗 ==================== */
+
+    openLogModal(session) {
+        this.modalSession = session;
+
+        // 重放缓冲的全部日志
+        this.logView.innerHTML = '';
+        session.lines.forEach(line => this.appendLogLine(line.text, line.type));
+        this.logView.scrollTop = this.logView.scrollHeight;
+
+        this.refreshModalChrome();
+        this.logModal.classList.remove('hidden');
+    }
+
+    closeLogModal() {
+        this.logModal.classList.add('hidden');
+        this.modalSession = null;
+    }
+
+    /**
+     * 根据当前 modalSession 的状态刷新弹窗头部 (圆点/标题) 与底部操作区。
+     */
+    refreshModalChrome() {
+        const session = this.modalSession;
+        if (!session) return;
+
+        const statusText = {
+            running: '正在反编译',
+            success: '反编译完成',
+            error: '反编译失败'
+        };
+        this.logStatusDot.className = `status-dot ${session.status}`;
+        this.logTitle.textContent = `${statusText[session.status] || ''} · ${session.pkgName}`;
+
+        // 产物操作区只在编译成功后出现
+        this.logFooter.classList.toggle('hidden', session.status !== 'success');
+    }
+
+    /**
+     * 追加一条日志到 session 缓冲; 若弹窗正展示该 session 则同步渲染。
+     */
+    appendLog(session, text, type = 'info') {
+        String(text).split('\n').forEach(raw => {
+            const line = raw.trim();
+            if (!line) return;
+            session.lines.push({ text: line, type });
+
+            let logType = type;
+            if (logType === 'info') {
+                // 只有明确的错误标识才标记为 error, 避免误判文件名中包含 error 的情况
+                if (line.includes('❌') || line.includes('错误:') || line.includes('Error:') ||
+                    line.includes('失败') || line.includes('异常') || line.includes('Exception')) {
+                    logType = 'error';
+                } else if (line.includes('⚠️') || line.includes('警告:') || line.includes('Warning:')) {
+                    logType = 'warning';
+                } else if (line.includes('✅') || line.includes('🎉') || line.includes('成功') ||
+                    line.includes('完成') || line.includes('Success') || line.includes('Completed')) {
+                    logType = 'success';
+                }
+            }
+
+            if (this.modalSession === session) {
+                this.appendLogLine(line, logType);
+                this.logView.scrollTop = this.logView.scrollHeight;
+            }
+        });
+    }
+
+    appendLogLine(text, type) {
+        const el = document.createElement('div');
+        el.className = `log-line ${type}`;
+        el.textContent = text;
+        this.logView.appendChild(el);
+    }
+
+    async copyCurrentLog() {
+        if (!this.modalSession) return;
+        const text = this.modalSession.lines.map(l => l.text).join('\n');
+
+        try {
+            if (navigator.clipboard && window.isSecureContext) {
+                await navigator.clipboard.writeText(text);
+            } else {
+                // 降级: 传统 execCommand
+                const textArea = document.createElement('textarea');
+                textArea.value = text;
+                textArea.style.position = 'fixed';
+                textArea.style.left = '-999999px';
+                textArea.style.top = '-999999px';
+                document.body.appendChild(textArea);
+                textArea.focus();
+                textArea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textArea);
+            }
+            this.flashButton(this.copyLogBtn, '<i class="fas fa-check"></i> 已复制');
+        } catch (err) {
+            console.error('复制失败:', err);
+            this.flashButton(this.copyLogBtn, '<i class="fas fa-xmark"></i> 复制失败');
+        }
+    }
+
+    flashButton(btn, html) {
+        const original = btn.innerHTML;
+        btn.innerHTML = html;
+        setTimeout(() => { btn.innerHTML = original; }, 2000);
+    }
+
+    /* ==================== 产物操作 ==================== */
+
+    /**
+     * 打开产物目录 (仅桌面版)。产物固定输出在 workspace.path/OUTPUT。
+     */
+    async openOutputDir() {
+        if (!this.workspacePath) return;
+        const outputDir = this.workspacePath.replace(/\/+$/, '') + '/OUTPUT';
+
+        try {
+            const result = await window.wedecodeDesktop.openPath(outputDir);
+            if (result && result.success === false) {
+                alert('打开目录失败: ' + (result.error || '未知错误'));
+            }
+        } catch (err) {
+            alert('打开目录失败: ' + (err.message || err));
+        }
+    }
+
+    async downloadZip() {
+        if (!this.workspaceId) {
+            alert('没有可下载的结果');
+            return;
+        }
+
+        this.downloadZipBtn.disabled = true;
+        try {
+            const response = await fetch(`/api/workspaces/${this.workspaceId}/download`);
+            if (!response.ok) {
+                if (response.status === 404) throw new Error('未找到反编译结果, 请先完成反编译');
+                throw new Error('下载失败');
+            }
+
+            let filename = `反编译结果_${new Date().toISOString().slice(0, 10)}.zip`;
+            const contentDisposition = response.headers.get('Content-Disposition');
+            if (contentDisposition) {
+                const match = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+                if (match && match[1]) {
+                    filename = decodeURIComponent(match[1].replace(/['"]/g, ''));
+                }
+            }
+
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+
+            this.flashButton(this.downloadZipBtn, '<i class="fas fa-check"></i> 已下载');
+        } catch (error) {
+            alert('下载失败: ' + (error.message || error));
+        } finally {
+            this.downloadZipBtn.disabled = false;
+        }
+    }
+
+    /* ==================== WebSocket ==================== */
+
+    /**
+     * 连接/断开/重连对用户是不可见的实现细节, 不进 UI;
+     * 只有反编译进程的输出才会显示。
+     */
+    connectWebSocket() {
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        this.socket = new WebSocket(`${protocol}//${window.location.host}`);
+
+        this.socket.onopen = () => this.subscribeWorkspace();
+
+        this.socket.onmessage = (event) => {
+            try {
+                this.handleWebSocketMessage(JSON.parse(event.data));
+            } catch (error) {
+                // 非 JSON 消息直接忽略
+            }
+        };
+
+        this.socket.onclose = () => {
+            // 静默重连, 编译日志在重连窗口内的丢失由 exit 事件兜底
+            setTimeout(() => this.connectWebSocket(), 3000);
+        };
+    }
+
+    /**
+     * 订阅工作区事件。服务端按 client.workspaceId 定向广播,
+     * 拿到真实 workspace id 后必须重新订阅, 否则编译日志一条都收不到。
+     */
+    subscribeWorkspace() {
+        if (this.socket?.readyState !== 1 || !this.workspaceId) return;
+        this.socket.send(JSON.stringify({
+            type: 'subscribe',
+            workspaceId: this.workspaceId
+        }));
+    }
+
+    handleWebSocketMessage(data) {
+        if (data.type !== 'execution') return;
+
+        let session = data.executionId ? this.sessions.get(data.executionId) : null;
+
+        // 竞态兜底: 服务端日志可能先于 compile-folder 的 HTTP 响应到达,
+        // 此时 executionId 尚未登记 —— 由于编译被串行化, 未识别的日志
+        // 只可能属于当前 pendingSession。
+        if (!session && this.pendingSession && this.isCompiling) {
+            session = this.pendingSession;
+        }
+        if (!session) return;
+
+        if (data.event === 'output') {
+            this.appendLog(session, data.data, 'info');
+        } else if (data.event === 'error') {
+            this.appendLog(session, data.data, 'error');
+        } else if (data.event === 'exit') {
+            const ok = data.code === 0;
+            session.status = ok ? 'success' : 'error';
+            this.appendLog(
+                session,
+                ok ? '反编译完成' : `反编译失败, 退出码: ${data.code}`,
+                ok ? 'success' : 'error'
+            );
+            this.finishCompile(session, session.status);
+        }
+    }
+
+    /* ==================== 工作区 ==================== */
+
+    /**
+     * 复用或创建工作区 (反编译产物按工作区隔离存放)。
      */
     async ensureWorkspace() {
-        if (this.currentWorkspaceId) return { id: this.currentWorkspaceId };
+        if (this.workspaceId) return { id: this.workspaceId, path: this.workspacePath };
 
         const res = await fetch('/api/workspaces', {
             method: 'POST',
@@ -251,410 +554,24 @@ class WedecodeApp {
         if (!res.ok) throw new Error(data.error || '创建工作区失败');
 
         const ws = data.workspace || data;
-        this.currentWorkspaceId = ws.id;
+        this.workspaceId = ws.id;
+        this.workspacePath = ws.path;
 
-        // 关键: 服务端按 workspaceId 定向广播。连接建立时订阅的是
-        // 'default'(那时还不知道真实 id), 拿到真实 id 后必须重新订阅,
-        // 否则编译日志一条都收不到。
+        // 关键: 服务端按 workspaceId 定向广播, 拿到真实 id 后必须重新订阅
         this.subscribeWorkspace();
 
         return ws;
     }
+
+    /* ==================== 工具 ==================== */
 
     escapeHtml(str) {
         return String(str == null ? '' : str)
             .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
             .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
     }
-
-    setupEventListeners() {
-        // 本机包扫描
-        this.scanBtn?.addEventListener('click', () => this.handleScan());
-
-        // 工具栏
-        this.downloadBtn?.addEventListener('click', () => this.downloadResults());
-        this.clearLogBtn?.addEventListener('click', () => this.clearLogs());
-        this.viewFullLogBtn?.addEventListener('click', () => this.showFullLogModal());
-
-        // 日志模态框
-        this.closeModal?.addEventListener('click', () => this.hideFullLogModal());
-        this.copyLogBtn?.addEventListener('click', () => this.copyLogsToClipboard());
-        this.logModal?.addEventListener('click', (e) => {
-            if (e.target === this.logModal) this.hideFullLogModal();
-        });
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape' && this.logModal?.style.display === 'block') {
-                this.hideFullLogModal();
-            }
-        });
-    }
-
-    connectWebSocket() {
-        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const wsUrl = `${protocol}//${window.location.host}`;
-        
-        this.socket = new WebSocket(wsUrl);
-        
-this.socket.onopen = () => {
-            this.addLog('WebSocket 连接已建立', 'success');
-            this.subscribeWorkspace();
-        };
-
-        this.socket.onmessage = (event) => {
-            try {
-                const data = JSON.parse(event.data);
-                console.log('收到 WebSocket 消息:', data); // 添加调试日志
-                this.handleWebSocketMessage(data);
-            } catch (error) {
-                console.error('WebSocket 消息解析错误:', error);
-            }
-        };
-        
-        this.socket.onclose = () => {
-            this.addLog('WebSocket 连接已断开', 'warning');
-            // 尝试重连
-            setTimeout(() => {
-                this.connectWebSocket();
-            }, 3000);
-        };
-        
-        this.socket.onerror = (error) => {
-            this.addLog('WebSocket 连接错误', 'error');
-            console.error('WebSocket error:', error);
-        };
-    }
-
-    /**
-     * 订阅工作区事件。
-     *
-     * 服务端按 client.workspaceId 做定向广播, 因此 workspaceId 必须与
-     * 编译时使用的真实 id 一致。连接建立时还不知道真实 id(先发default),
-     * 拿到后需再次调用本方法重新订阅。
-     */
-    subscribeWorkspace() {
-        if (this.socket?.readyState !== 1) return;
-        this.socket.send(JSON.stringify({
-            type: 'subscribe',
-            workspaceId: this.currentWorkspaceId || 'default'
-        }));
-    }
-
-    handleWebSocketMessage(data) {
-        if (data.type !== 'execution') return;
-
-        // 编译走 compile-folder 接口, 其executionId 在响应里返回,
-        // 可能因竞态晚于首条日志到达, 故只在已知时做比对:
-        // 未设置(currentExecutionId 为空)则接收全部 execution 事件。
-        if (this.currentExecutionId && data.executionId !== this.currentExecutionId) {
-            return;
-        }
-
-        {
-            if (data.event === 'output') {
-                // 处理不同类型的输出
-                const output = data.data.trim();
-                if (output) {
-                    // 添加到反编译进程输出历史（用于完整日志显示）
-                    this.processOutputHistory.push({
-                        timestamp: new Date().toLocaleString(),
-                        content: output,
-                        type: 'output'
-                    });
-                    
-                    // 根据输出内容判断日志类型
-                    let logType = 'info';
-                    // 只有明确的错误信息才标记为error，避免误判文件名中包含error的情况
-                    if (output.includes('❌') || output.includes('错误:') || output.includes('Error:') || 
-                        output.includes('失败') || output.includes('异常') || output.includes('Exception')) {
-                        logType = 'error';
-                    } else if (output.includes('⚠️') || output.includes('警告:') || output.includes('Warning:')) {
-                        logType = 'warning';
-                    } else if (output.includes('✅') || output.includes('🎉') || output.includes('成功') || 
-                               output.includes('完成') || output.includes('Success') || output.includes('Completed')) {
-                        logType = 'success';
-                    }
-                    
-                    this.addLog(output, logType);
-                }
-            } else if (data.event === 'error') {
-                // 添加到反编译进程输出历史
-                this.processOutputHistory.push({
-                    timestamp: new Date().toLocaleString(),
-                    content: data.data,
-                    type: 'error'
-                });
-                
-                this.addLog(data.data, 'error');
-} else if (data.event === 'exit') {
-                this.isProcessing = false;
-                this.currentExecutionId = null;
-                this.restoreCompileButton(document.getElementById('compileScanBtn'));
-
-                if (data.code === 0) {
-                    this.addLog('反编译完成', 'success');
-                    this.showStatus('反编译成功完成', 'success');
-                    if (this.downloadBtn) this.downloadBtn.disabled = false;
-                } else {
-                    this.addLog(`反编译失败，退出码: ${data.code}`, 'error');
-                    this.showStatus('反编译失败', 'error');
-                }
-            }
-        }
-    }
-
-
-
-
-
-    async createWorkspace() {
-        const response = await fetch('/api/workspaces', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                name: `反编译_${new Date().toISOString().slice(0, 19).replace(/[:-]/g, '')}`,
-                type: 'miniapp',
-                description: '微信小程序反编译工作区'
-            })
-        });
-
-        if (!response.ok) {
-            throw new Error('创建工作区失败');
-        }
-
-        return await response.json();
-    }
-
-    async downloadResults() {
-        if (!this.currentWorkspaceId) {
-            this.showStatus('没有可下载的结果', 'error');
-            return;
-        }
-
-        this.addLog('📦 正在打包下载文件...', 'info');
-        this.showStatus('正在准备下载...', 'processing');
-
-        try {
-            const response = await fetch(`/api/workspaces/${this.currentWorkspaceId}/download`, {
-                method: 'GET'
-            });
-
-            if (!response.ok) {
-                if (response.status === 404) {
-                    throw new Error('未找到反编译结果，请先完成反编译');
-                }
-                throw new Error('下载失败');
-            }
-
-            // 从响应头中获取文件名
-            let filename = `反编译结果_${new Date().toISOString().slice(0, 10)}.zip`; // 默认文件名
-            const contentDisposition = response.headers.get('Content-Disposition');
-            
-            // 调试日志
-            console.log('🔍 [下载调试] Content-Disposition响应头:', contentDisposition);
-            console.log('🔍 [下载调试] 默认文件名:', filename);
-            
-            if (contentDisposition) {
-                const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
-                console.log('🔍 [下载调试] 文件名匹配结果:', filenameMatch);
-                if (filenameMatch && filenameMatch[1]) {
-                    // 移除引号并解码
-                    const rawFilename = filenameMatch[1].replace(/['"]/g, '');
-                    filename = decodeURIComponent(rawFilename);
-                    console.log('🔍 [下载调试] 原始文件名:', rawFilename);
-                    console.log('🔍 [下载调试] 解码后文件名:', filename);
-                }
-            } else {
-                console.log('� [下载调试] 未找到Content-Disposition响应头，使用默认文件名');
-            }
-
-            const blob = await response.blob();
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = filename;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            window.URL.revokeObjectURL(url);
-
-            this.addLog(`✅ 下载完成！文件名: ${filename}`, 'success');
-            this.showStatus('下载完成', 'success');
-
-        } catch (error) {
-            this.addLog(`❌ 下载失败: ${error.message}`, 'error');
-            this.showStatus('下载失败', 'error');
-        }
-    }
-
-    addLog(message, type = 'info') {
-        const timestamp = new Date().toLocaleTimeString();
-        const fullTimestamp = new Date().toLocaleString();
-        const logLine = document.createElement('div');
-        logLine.className = `log-line ${type}`;
-        logLine.textContent = `[${timestamp}] ${message}`;
-        
-        // 添加到显示区域
-        this.logContent.appendChild(logLine);
-        this.logContent.scrollTop = this.logContent.scrollHeight;
-        
-        // 添加到完整日志历史
-        this.fullLogHistory.push({
-            timestamp: fullTimestamp,
-            message: message,
-            type: type
-        });
-        
-        // 启用查看完整日志按钮
-        if (this.viewFullLogBtn) {
-            this.viewFullLogBtn.disabled = false;
-        }
-    }
-
-    clearLogs() {
-        this.logContent.innerHTML = '';
-        this.fullLogHistory = [];
-        this.processOutputHistory = []; // 同时清空反编译进程输出历史
-        
-        // 禁用查看完整日志按钮
-        if (this.viewFullLogBtn) {
-            this.viewFullLogBtn.disabled = true;
-        }
-    }
-
-    showStatus(message, type) {
-        this.status.textContent = message;
-        this.status.className = `status ${type}`;
-        this.status.classList.remove('hidden');
-
-        // 清除之前的 spinner
-        const existingSpinner = this.status.querySelector('.spinner');
-        if (existingSpinner) {
-            existingSpinner.remove();
-        }
-
-        if (type === 'processing') {
-            const spinner = document.createElement('span');
-            spinner.className = 'spinner';
-            spinner.style.marginRight = '10px';
-            this.status.insertBefore(spinner, this.status.firstChild);
-        }
-    }
-
-    showProgress(current, total, text = '上传进度', details = '') {
-        const percent = Math.round((current / total) * 100);
-        
-        this.progressContainer.classList.remove('hidden');
-        this.progressText.textContent = text;
-        this.progressPercent.textContent = `${percent}%`;
-        this.progressFill.style.width = `${percent}%`;
-        
-        if (details) {
-            this.progressDetails.textContent = details;
-        }
-    }
-
-    hideProgress() {
-        this.progressContainer.classList.add('hidden');
-        this.progressFill.style.width = '0%';
-        this.progressPercent.textContent = '0%';
-        this.progressDetails.textContent = '';
-    }
-
-    showFullLogModal() {
-        // 生成完整日志内容 - 显示反编译进程的详细输出
-        let logText = '';
-        if (this.processOutputHistory.length === 0) {
-            logText = '暂无反编译进程日志内容\n\n如果您看到此消息，说明反编译进程尚未开始或没有产生输出。';
-        } else {
-            logText = this.processOutputHistory.map(log => {
-                const typePrefix = log.type === 'error' ? '❌ [错误] ' : '';
-                return `${typePrefix}${log.content}`;
-            }).join('\n');
-        }
-        
-        this.fullLogContent.textContent = logText;
-        this.logModal.style.display = 'block';
-        
-        // 滚动到底部
-        setTimeout(() => {
-            this.fullLogContent.scrollTop = this.fullLogContent.scrollHeight;
-        }, 100);
-    }
-
-    hideFullLogModal() {
-        this.logModal.style.display = 'none';
-    }
-
-    async copyLogsToClipboard() {
-        try {
-            // 获取当前显示的日志内容
-            const logText = this.fullLogContent.textContent;
-            
-            // 使用现代的 Clipboard API
-            if (navigator.clipboard && window.isSecureContext) {
-                await navigator.clipboard.writeText(logText);
-            } else {
-                // 降级方案：使用传统的 document.execCommand
-                const textArea = document.createElement('textarea');
-                textArea.value = logText;
-                textArea.style.position = 'fixed';
-                textArea.style.left = '-999999px';
-                textArea.style.top = '-999999px';
-                document.body.appendChild(textArea);
-                textArea.focus();
-                textArea.select();
-                document.execCommand('copy');
-                document.body.removeChild(textArea);
-            }
-            
-            // 显示成功提示
-            this.showCopySuccess();
-        } catch (err) {
-            console.error('复制失败:', err);
-            this.showCopyError();
-        }
-    }
-
-    showCopySuccess() {
-        const originalText = this.copyLogBtn.innerHTML;
-        this.copyLogBtn.innerHTML = '<i class="fas fa-check"></i> 已复制';
-        this.copyLogBtn.style.background = '#28a745';
-        
-        setTimeout(() => {
-            this.copyLogBtn.innerHTML = originalText;
-            this.copyLogBtn.style.background = '';
-        }, 2000);
-    }
-
-    showCopyError() {
-        const originalText = this.copyLogBtn.innerHTML;
-        this.copyLogBtn.innerHTML = '<i class="fas fa-times"></i> 复制失败';
-        this.copyLogBtn.style.background = '#dc3545';
-        
-        setTimeout(() => {
-            this.copyLogBtn.innerHTML = originalText;
-            this.copyLogBtn.style.background = '';
-        }, 2000);
-    }
-
-    formatFileSize(bytes) {
-        if (bytes === 0) return '0 Bytes';
-        const k = 1024;
-        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-        const i = Math.floor(Math.log(bytes) / Math.log(k));
-        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-    }
-
-
-
-    /**
-     * 跨平台路径分割函数
-     */
 }
 
-// 初始化应用
 document.addEventListener('DOMContentLoaded', () => {
     new WedecodeApp();
 });
