@@ -117,7 +117,7 @@ export async function scanPackagesForDisplay(manualScanPath: string = ''): Promi
 
   const list = scanPackagesPure(manualScanPath)
 
-  // 昵称只能由远程接口提供(kainy.cn), 本地包内不含该信息。
+  // 昵称只能由远程查询接口提供(open.kainy.cn), 本地包内不含该信息。
   // 一次可能扫到几十个包, 故限制并发, 避免串行叠加 10s 超时。
   const CONCURRENCY = 5
   const results: Array<Record<any, any>> = new Array(list.length)

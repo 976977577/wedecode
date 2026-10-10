@@ -4,6 +4,7 @@ import path from 'node:path';
 import { PackageInfoResult } from '@/typings';
 import { printLog } from '@/utils/common';
 import { readLocalFile } from '@/utils/fs-process';
+import { WXAPP_QUERY_API, WXAPP_QUERY_API_KEY } from '@/constant/index';
 
 /**
  * 小程序信息工具类
@@ -12,20 +13,37 @@ import { readLocalFile } from '@/utils/fs-process';
 export class WxAppInfoUtils {
   /**
    * 从远程API获取小程序信息
+   *
+   * 昵称/描述等信息不在 wxapkg 包内, 也不在客户端可读的文件里(微信的本地库是加密的),
+   * 只能走第三方查询接口。鉴权走 x-api-key 请求头, 缺失或失效会返回 403。
+   *
    * @param appid 小程序的appid
    * @returns 小程序信息或空对象
    */
+  /**
+   * 发起 appid 查询。默认跟随系统代理; 若失败且拿不到任何响应, 说明是连接层问题
+   * (某些本机代理会把 HTTPS 请求变成重定向循环, 表现为
+   * "Maximum number of redirects exceeded"), 此时禁用代理重试一次。
+   * 有响应的错误(如 403 鉴权失败) 不重试, 避免白白消耗接口额度。
+   * */
+  private static async postAppidQuery(appid: string) {
+    const payload = { appid };
+    const headers = {
+      'Content-Type': 'application/json',
+      'x-api-key': WXAPP_QUERY_API_KEY
+    };
+    try {
+      return await axios.post(WXAPP_QUERY_API, payload, { timeout: 10000, headers });
+    } catch (error) {
+      if (error.response) throw error;
+      return await axios.post(WXAPP_QUERY_API, payload, { timeout: 10000, headers, proxy: false });
+    }
+  }
+
   static async getWxAppInfo(appid: string): Promise<Partial<PackageInfoResult>> {
     try {
       printLog(`🔍 正在获取小程序信息: ${appid}`, { isEnd: true });
-      const response = await axios.post('https://kainy.cn/api/weapp/info/', {
-        appid: appid
-      }, {
-        timeout: 10000, // 10秒超时
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      });
+      const response = await this.postAppidQuery(appid);
 
       // API返回格式: {code: 0, data: {nickname: "...", appid: "..."}}
       if (response.data && response.data.code === 0 && response.data.data && response.data.data.nickname) {
@@ -38,6 +56,10 @@ export class WxAppInfoUtils {
       }
     } catch (error) {
       printLog(`❌ 获取小程序信息失败: ${error.message}`, { isEnd: true });
+      // 403 基本只有两种可能: key 没配/已失效, 或额度用尽 —— 明确提示, 免得误判成网络问题
+      if (error.response?.status === 403) {
+        printLog(`🔑 接口鉴权失败(403): 请检查 WXAPP_QUERY_API_KEY 是否有效或额度是否已用尽`, { isEnd: true });
+      }
       if (error.response) {
         printLog(`📄 API错误响应: ${JSON.stringify(error.response.data)}`, { isEnd: true });
       }

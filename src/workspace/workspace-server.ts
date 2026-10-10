@@ -439,7 +439,7 @@ export class WorkspaceServer {
         count: packages.length,
         packages,
         scannedPathList,
-        // 昵称依赖第三方接口(kainy.cn), 该接口目前被 Cloudflare 拦截。
+        // 昵称依赖第三方查询接口(open.kainy.cn), 可能鉴权失败或超额。
         // 明确告知调用方, 避免用户困惑于「为什么只有 appid」
         nameLookupFailed: Boolean(nameLookupFailed),
         // 扫不到时给出可操作的原因, 便于界面展示
