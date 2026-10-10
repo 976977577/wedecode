@@ -103,15 +103,30 @@ class WedecodeApp {
         const items = packages.map((pkg, index) => `
             <li class="scan-list-item" data-scan-index="${index}">
                 <div class="scan-item-main">
-                    <div class="scan-item-name">${this.escapeHtml(pkg.appName || pkg.appId)}</div>
+                    <div class="scan-item-name">
+                        ${this.escapeHtml(pkg.appName || pkg.appId)}
+                        ${pkg.isAppId && !pkg.nameResolved
+                            ? '<span class="name-tag">仅 appid</span>' : ''}
+                    </div>
                     <div class="scan-item-meta">${this.escapeHtml(pkg.description || pkg.storagePath)}</div>
                 </div>
                 <div class="scan-item-date">${this.escapeHtml(pkg.updateDate)}</div>
             </li>
         `).join('');
 
+        // 昵称只能由第三方接口提供, 该接口挂了就把原因说清楚,
+        // 否则用户会对着满屏 appid 不知道出了什么问题
+        const nameNotice = data.nameLookupFailed ? `
+            <div class="scan-notice">
+                <i class="fas fa-info-circle"></i>
+                小程序名称需联网查询,但该服务当前不可用(疑似被防护策略拦截),因此仅显示 appid。
+                这不影响反编译功能。
+            </div>
+        ` : '';
+
         this.scanBody.innerHTML = `
             <div style="color:#666;margin-bottom:8px;">找到 ${packages.length} 个小程序包，点击选中后可反编译:</div>
+            ${nameNotice}
             <ul class="scan-list" id="scanList">${items}</ul>
             <div class="scan-selected-tip" id="scanSelectedTip" style="display:none;"></div>
         `;

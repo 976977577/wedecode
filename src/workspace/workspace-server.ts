@@ -416,13 +416,16 @@ export class WorkspaceServer {
         }
       }
 
-      const { packages, scannedPathList } = await scanPackagesForDisplay(manualPath);
+      const { packages, scannedPathList, nameLookupFailed } = await scanPackagesForDisplay(manualPath);
 
       res.json({
         success: true,
         count: packages.length,
         packages,
         scannedPathList,
+        // 昵称依赖第三方接口(kainy.cn), 该接口目前被 Cloudflare 拦截。
+        // 明确告知调用方, 避免用户困惑于「为什么只有 appid」
+        nameLookupFailed: Boolean(nameLookupFailed),
         // 扫不到时给出可操作的原因, 便于界面展示
         hint: packages.length === 0
           ? '未找到小程序包。请先在微信中打开任意小程序产生缓存, 然后重新扫描。'

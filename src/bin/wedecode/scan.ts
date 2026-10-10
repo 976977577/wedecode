@@ -106,8 +106,10 @@ export async function scanPackagesForDisplay(manualScanPath: string = ''): Promi
     appName: string
     updateDate: string
     description: string
+    nameResolved: boolean
   }>
   scannedPathList: string[]
+  nameLookupFailed: boolean
 }> {
   const scanPathList: string[] = manualScanPath.trim()
     ? [path.resolve(manualScanPath)]
@@ -115,8 +117,17 @@ export async function scanPackagesForDisplay(manualScanPath: string = ''): Promi
 
   const list = scanPackagesPure(manualScanPath)
 
-  const packages = await Promise.all(
-    list.map(async item => {
+  // 昵称只能由远程接口提供(kainy.cn), 本地包内不含该信息。
+  // 一次可能扫到几十个包, 故限制并发, 避免串行叠加 10s 超时。
+  const CONCURRENCY = 5
+  const results: Array<Record<any, any>> = new Array(list.length)
+  let resolvedCount = 0
+  let cursor = 0
+
+  const worker = async () => {
+    while (cursor < list.length) {
+      const index = cursor++
+      const item = list[index]
       let mtime = new Date()
       try {
         mtime = fs.statSync(item.storagePath).mtime
@@ -125,16 +136,18 @@ export async function scanPackagesForDisplay(manualScanPath: string = ''): Promi
       const updateDate = `${mtime.getMonth() + 1}/${mtime.getDate()} ${mtime.toLocaleTimeString()}`
 
       if (!item.isAppId) {
-        return {
+        results[index] = {
           appId: item.appId,
           storagePath: item.storagePath,
           isAppId: false,
           appName: item.appId,
           updateDate,
-          description: item.storagePath
+          description: item.storagePath,
+          nameResolved: false
         }
+        continue
       }
-      // 联网时补充昵称与描述; 失败或离线则退回 appId
+
       let nickname = ''
       let description = ''
       try {
@@ -143,18 +156,31 @@ export async function scanPackagesForDisplay(manualScanPath: string = ''): Promi
         description = info?.description || ''
       } catch {
       }
-      return {
+      if (nickname) resolvedCount++
+
+      results[index] = {
         appId: item.appId,
         storagePath: item.storagePath,
         isAppId: true,
         appName: nickname || item.appId,
         updateDate,
-        description
+        description,
+        nameResolved: Boolean(nickname)
       }
-    })
+    }
+  }
+
+  await Promise.all(
+    Array.from({ length: Math.min(CONCURRENCY, list.length) }, () => worker())
   )
 
-  return { packages, scannedPathList: scanPathList }
+  const appidCount = list.filter(i => i.isAppId).length
+  return {
+    packages: results,
+    scannedPathList: scanPathList,
+    // 有 appid 却一个昵称都没拿到 → 基本可判定远程接口不可用
+    nameLookupFailed: appidCount > 0 && resolvedCount === 0
+  }
 }
 
 /**
