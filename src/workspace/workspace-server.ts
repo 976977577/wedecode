@@ -480,10 +480,12 @@ export class WorkspaceServer {
       return;
     }
 
-    // 索引只从微信缓存目录建立, 且路径由索引精确匹配得出, 不含用户输入
+    // 索引只从微信缓存目录建立, 且路径由索引精确匹配得出, 不含用户输入。
+    // dotfiles 必须为 allow: 旧版微信的图标目录是 .wxapplet (以点开头的隐藏目录),
+    // 默认的 deny 会把它整个判为 dotfile 而返回 403 Forbidden
     res.sendFile(iconPath, {
       headers: { 'Cache-Control': 'public, max-age=86400' },
-      dotfiles: 'deny'
+      dotfiles: 'allow'
     });
   }
 

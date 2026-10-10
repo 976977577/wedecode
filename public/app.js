@@ -147,16 +147,12 @@ class WedecodeApp {
         }
 
         const items = packages.map((pkg, index) => {
-            // 确定性配色: 同一 appid 永远得到同一个渐变色, 长列表里靠颜色就能扫视定位
-            let hue = 0;
-            for (const ch of String(pkg.appId)) hue = (hue * 31 + ch.charCodeAt(0)) % 360;
-            const iconStyle = `background:linear-gradient(135deg,hsl(${hue},72%,58%),hsl(${(hue + 42) % 360},68%,46%))`;
-            // 头像文字: appid 去掉 wx 前缀后的前两位, 比千篇一律的 "wx" 更可分辨
+            // 头像文字: appid 去掉 wx 前缀后的前两位
             const iconText = String(pkg.appId).replace(/^wx/i, '').slice(0, 2).toUpperCase() || 'WX';
 
-            // 图标来自微信本地缓存(纯本地, 不联网)。默认只显示色块+文字,
+            // 图标来自微信本地缓存(纯本地, 不联网)。默认只显示中性色块+文字,
             // 图片真正加载成功(onload)后才显示并盖住文字; 加载失败/缓存里没有
-            // 则保持色块, 不会出现破图。
+            // 则保持色块, 不会出现破图。统一灰调, 避免和真图标混排时花花绿绿。
             const iconInner = pkg.hasIcon
                 ? `<span class="icon-fallback">${this.escapeHtml(iconText)}</span>`
                   + `<img class="icon-img" src="/api/applet-icon?appid=${encodeURIComponent(pkg.appId)}" alt="" `
@@ -171,7 +167,7 @@ class WedecodeApp {
 
             return `
             <li class="pkg-row" title="${this.escapeHtml(pkg.storagePath)}">
-                <div class="pkg-icon" style="${iconStyle}">${iconInner}</div>
+                <div class="pkg-icon">${iconInner}</div>
                 <div class="pkg-main">
                     <div class="pkg-name"><span class="appid-text">${this.escapeHtml(pkg.appId)}</span></div>
                     <div class="pkg-meta"><span class="ver">v${this.escapeHtml(version)}</span><span>${this.escapeHtml(shortTime)}</span></div>

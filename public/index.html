@@ -207,12 +207,13 @@
             background: #f7f8fc;
         }
 
-        /* 渐变背景色由 JS 按 appid 哈希内联提供, 同一包永远同一配色 */
+        /* 未命中真图标时的中性占位色块 (原来按 appid 哈希渐变, 已按要求去掉) */
         .pkg-icon {
             width: 40px;
             height: 40px;
             border-radius: 11px;
-            color: #fff;
+            background: linear-gradient(135deg, #eceef2, #e2e5eb);
+            color: #9aa2b1;
             font-size: .82em;
             font-weight: 700;
             letter-spacing: .5px;
@@ -221,7 +222,6 @@
             justify-content: center;
             flex-shrink: 0;
             overflow: hidden;
-            text-shadow: 0 1px 2px rgba(0,0,0,.18);
         }
 
         /* 微信缓存图标: 必须显式给出尺寸, 否则会按原图大小撑破 40px 方块 */
