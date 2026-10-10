@@ -55,6 +55,16 @@ class WedecodeApp {
         this.openDirBtn = document.getElementById('openDirBtn');
         this.downloadZipBtn = document.getElementById('downloadZipBtn');
         this.clearOutputBtn = document.getElementById('clearOutputBtn');
+
+        // 设置弹窗
+        this.settingsBtn = document.getElementById('settingsBtn');
+        this.settingsModal = document.getElementById('settingsModal');
+        this.closeSettingsBtn = document.getElementById('closeSettingsBtn');
+        this.settingsOutputInput = document.getElementById('settingsOutputInput');
+        this.settingsBrowseBtn = document.getElementById('settingsBrowseBtn');
+        this.settingsSaveBtn = document.getElementById('settingsSaveBtn');
+        this.settingsCancelBtn = document.getElementById('settingsCancelBtn');
+        this.settingsHint = document.getElementById('settingsHint');
     }
 
     bindEvents() {
@@ -76,6 +86,26 @@ class WedecodeApp {
         this.openDirBtn?.addEventListener('click', () => this.openOutputDir());
         this.downloadZipBtn?.addEventListener('click', () => this.downloadZip());
         this.clearOutputBtn?.addEventListener('click', () => this.clearOutput());
+
+        // 设置弹窗
+        this.settingsBtn?.addEventListener('click', () => this.openSettings());
+        this.closeSettingsBtn?.addEventListener('click', () => this.closeSettings());
+        this.settingsCancelBtn?.addEventListener('click', () => this.closeSettings());
+        this.settingsModal?.addEventListener('click', (e) => {
+            if (e.target === this.settingsModal) this.closeSettings();
+        });
+        this.settingsSaveBtn?.addEventListener('click', () => this.saveSettings());
+        this.settingsBrowseBtn?.addEventListener('click', () => this.browseOutputDir());
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && !this.settingsModal.classList.contains('hidden')) {
+                this.closeSettings();
+            }
+        });
+
+        // 目录选择框是桌面版专属能力, 浏览器访问时隐藏
+        if (!window.wedecodeDesktop?.chooseDirectory) {
+            this.settingsBrowseBtn?.classList.add('hidden');
+        }
     }
 
     /* ==================== 扫描 ==================== */
@@ -445,6 +475,63 @@ class WedecodeApp {
             alert('清除产物失败: ' + msg);
         } finally {
             this.clearOutputBtn.disabled = false;
+        }
+    }
+
+    /* ==================== 设置 ==================== */
+
+    /** 打开设置弹窗, 拉取当前配置回填输入框 */
+    async openSettings() {
+        this.settingsModal.classList.remove('hidden');
+        this.settingsOutputInput.value = '';
+
+        try {
+            const res = await fetch('/api/settings');
+            const data = await res.json();
+            if (res.ok) {
+                this.settingsOutputInput.value = data.outputDir || '';
+                if (data.defaultDir) {
+                    this.settingsHint.textContent =
+                        `反编译出的源码会写入该目录。留空时输出到默认位置: ${data.defaultDir}`;
+                }
+            }
+        } catch {
+            // 拉取失败也允许编辑, 保存时会再校验
+        }
+    }
+
+    closeSettings() {
+        this.settingsModal.classList.add('hidden');
+    }
+
+    async saveSettings() {
+        const value = this.settingsOutputInput.value.trim();
+
+        this.settingsSaveBtn.disabled = true;
+        try {
+            const res = await fetch('/api/settings', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ outputDir: value })
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || '保存失败');
+
+            this.closeSettings();
+        } catch (err) {
+            alert('保存设置失败: ' + (err.message || err));
+        } finally {
+            this.settingsSaveBtn.disabled = false;
+        }
+    }
+
+    /** 桌面版: 弹出系统目录选择框回填输入框 */
+    async browseOutputDir() {
+        try {
+            const dir = await window.wedecodeDesktop.chooseDirectory();
+            if (dir) this.settingsOutputInput.value = dir;
+        } catch (err) {
+            alert('选择目录失败: ' + (err.message || err));
         }
     }
 

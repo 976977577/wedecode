@@ -135,6 +135,19 @@ function findByShape (mod) {
   )
 }
 
+/**
+ * 渲染进程请求弹出系统目录选择框 (设置里的「选择输出目录」)。
+ * 返回所选目录绝对路径, 取消返回 null。
+ */
+ipcMain.handle('choose-directory', async () => {
+  const win = BrowserWindow.getAllWindows()[0]
+  const result = await dialog.showOpenDialog(win, {
+    title: '选择反编译输出目录',
+    properties: ['openDirectory', 'createDirectory']
+  })
+  return result.canceled ? null : result.filePaths[0]
+})
+
 function createWindow (port) {
   const saved = store.get('windowBounds') || { width: 1280, height: 900 }
 

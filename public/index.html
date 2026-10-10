@@ -65,6 +65,31 @@
         .app-header {
             text-align: center;
             margin-bottom: 24px;
+            position: relative;
+        }
+
+        .settings-btn {
+            position: absolute;
+            right: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 34px;
+            height: 34px;
+            border: 1px solid var(--border);
+            border-radius: 9px;
+            background: #fff;
+            color: var(--text-secondary);
+            font-size: .95em;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background .15s ease, color .15s ease;
+        }
+
+        .settings-btn:hover {
+            background: #f0f2f8;
+            color: var(--text);
         }
 
         .app-title {
@@ -535,6 +560,57 @@
             flex: 1;
         }
 
+        /* 设置弹窗: 窄卡片 + 表单 (按钮保持自然宽度) */
+        .settings-card {
+            max-width: 540px;
+        }
+
+        .settings-card .modal-foot .btn-primary {
+            flex: 0 0 auto;
+        }
+
+        .settings-body {
+            padding: 20px 18px;
+        }
+
+        .settings-field .settings-label {
+            display: block;
+            font-weight: 600;
+            font-size: .92em;
+            color: var(--text);
+            margin-bottom: 8px;
+        }
+
+        .settings-row {
+            display: flex;
+            gap: 8px;
+        }
+
+        .settings-input {
+            flex: 1;
+            min-width: 0;
+            padding: 9px 12px;
+            border: 1px solid var(--border);
+            border-radius: 9px;
+            font-family: 'SF Mono', Menlo, Consolas, monospace;
+            font-size: .86em;
+            color: var(--text);
+            outline: none;
+            transition: border-color .15s ease, box-shadow .15s ease;
+        }
+
+        .settings-input:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px rgba(79, 97, 235, .12);
+        }
+
+        .settings-hint {
+            margin-top: 9px;
+            color: var(--text-hint);
+            font-size: .82em;
+            line-height: 1.6;
+        }
+
         .modal-foot .btn-ghost {
             flex: 1;
             justify-content: center;
@@ -559,6 +635,9 @@
     <div class="app">
         <header class="app-header">
             <div class="app-title">微信小程序反编译工具</div>
+            <button type="button" class="settings-btn" id="settingsBtn" title="设置">
+                <i class="fas fa-gear"></i>
+            </button>
         </header>
 
         <!-- 状态 1: 空态, 只有扫描入口 -->
@@ -611,6 +690,37 @@
                 </button>
                 <button type="button" class="btn-ghost btn-danger" id="clearOutputBtn">
                     <i class="fas fa-trash"></i> 清除本次产物
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 设置弹窗 -->
+    <div id="settingsModal" class="modal hidden">
+        <div class="modal-card settings-card">
+            <div class="modal-head">
+                <div class="modal-title"><i class="fas fa-gear"></i> 设置</div>
+                <button type="button" class="modal-close" id="closeSettingsBtn">&times;</button>
+            </div>
+            <div class="settings-body">
+                <div class="settings-field">
+                    <label class="settings-label" for="settingsOutputInput">反编译输出目录</label>
+                    <div class="settings-row">
+                        <input type="text" id="settingsOutputInput" class="settings-input"
+                               placeholder="留空使用默认位置" spellcheck="false" autocomplete="off">
+                        <button type="button" class="btn-ghost hidden" id="settingsBrowseBtn">
+                            <i class="fas fa-folder-open"></i> 选择…
+                        </button>
+                    </div>
+                    <div class="settings-hint" id="settingsHint">
+                        反编译出的源码会写入该目录。留空时输出到应用默认的工作区目录。
+                    </div>
+                </div>
+            </div>
+            <div class="modal-foot" id="settingsFooter">
+                <button type="button" class="btn-ghost" id="settingsCancelBtn">取消</button>
+                <button type="button" class="btn-primary" id="settingsSaveBtn">
+                    <i class="fas fa-check"></i> 保存
                 </button>
             </div>
         </div>

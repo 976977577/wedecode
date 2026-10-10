@@ -59,6 +59,8 @@ export class WorkspaceServer {
   private workspacesDir: string;
   private uploadsDir: string;
   private outputDir: string;
+  /** 用户设置 (settings.json), 目前只有自定义反编译输出目录 */
+  private settings: { outputDir?: string } = {};
 
   /**
    * @param port 监听端口
@@ -86,6 +88,7 @@ export class WorkspaceServer {
     this.setupWebSocket();
     this.ensureDirectories();
     this.loadWorkspaces();
+    this.loadSettings();
 
     this.server.listen(port, () => {
       console.log('');
@@ -177,6 +180,10 @@ export class WorkspaceServer {
 
     // 小程序图标 (来自微信本地缓存, 纯本地读取)
     this.app.get('/api/applet-icon', this.getAppletIcon.bind(this));
+
+    // 用户设置 (反编译输出目录等)
+    this.app.get('/api/settings', this.getSettings.bind(this));
+    this.app.put('/api/settings', this.updateSettings.bind(this));
 
     // 健康检查
     this.app.get('/api/health', (req, res) => {
@@ -293,6 +300,42 @@ export class WorkspaceServer {
 
   private generateId(): string {
     return Math.random().toString(36).substring(2) + Date.now().toString(36);
+  }
+
+  /** 读取用户设置 (workspacesDir/settings.json)。文件损坏时视为空设置。 */
+  private loadSettings(): void {
+    try {
+      const settingsPath = path.join(this.workspacesDir, 'settings.json');
+      if (fs.existsSync(settingsPath)) {
+        const data = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
+        if (data && typeof data === 'object') {
+          this.settings = data;
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load settings:', error);
+      this.settings = {};
+    }
+  }
+
+  private saveSettings(): void {
+    try {
+      const settingsPath = path.join(this.workspacesDir, 'settings.json');
+      fs.writeFileSync(settingsPath, JSON.stringify(this.settings, null, 2));
+    } catch (error) {
+      console.error('Failed to save settings:', error);
+    }
+  }
+
+  /**
+   * 解析某工作区的反编译产物目录。
+   * 用户设置过自定义输出目录时直接使用它 (所有工作区共用, 与「默认工作区」
+   * 单工作区模型一致); 否则用工作区内的 OUTPUT 目录。
+   */
+  private getOutputPath(workspace: Workspace): string {
+    return this.settings.outputDir
+      ? path.resolve(this.settings.outputDir)
+      : path.join(workspace.path, 'OUTPUT');
   }
 
   private handleUploadError(error: any, req: express.Request, res: express.Response, next: express.NextFunction): void {
@@ -867,11 +910,11 @@ export class WorkspaceServer {
     }
 
     try {
-      // 查找反编译结果文件夹，优先查找 OUTPUT，然后查找 decompiled
-      let outputPath = path.join(workspace.path, 'OUTPUT');
-      let folderType = 'OUTPUT';
+      // 自定义输出目录时直接使用; 默认模式下查找 OUTPUT, 再退回旧版 decompiled
+      let outputPath = this.getOutputPath(workspace);
+      let folderType = path.basename(outputPath);
 
-      if (!fs.existsSync(outputPath)) {
+      if (!fs.existsSync(outputPath) && !this.settings.outputDir) {
         outputPath = path.join(workspace.path, 'decompiled');
         folderType = 'decompiled';
       }
@@ -1037,7 +1080,7 @@ export class WorkspaceServer {
       return;
     }
 
-    const outputPath = path.join(workspace.path, 'OUTPUT');
+    const outputPath = this.getOutputPath(workspace);
     if (!fs.existsSync(outputPath)) {
       res.status(404).json({ error: '产物目录不存在, 请先完成反编译', path: outputPath });
       return;
@@ -1067,7 +1110,7 @@ export class WorkspaceServer {
       return;
     }
 
-    const outputPath = path.join(workspace.path, 'OUTPUT');
+    const outputPath = this.getOutputPath(workspace);
     if (!fs.existsSync(outputPath)) {
       res.json({ success: true, removed: false, message: '产物目录不存在, 无需清理', path: outputPath });
       return;
@@ -1083,6 +1126,61 @@ export class WorkspaceServer {
         message: error instanceof Error ? error.message : String(error)
       });
     }
+  }
+
+  /** 读取用户设置 */
+  private getSettings(req: express.Request, res: express.Response): void {
+    res.json({
+      outputDir: this.settings.outputDir || '',
+      defaultDir: path.join(this.workspacesDir, 'output')
+    });
+  }
+
+  /**
+   * 更新用户设置。目前只有 outputDir:
+   * - 传空字符串表示恢复默认 (工作区内 OUTPUT 目录)
+   * - 传自定义目录时必须是绝对路径, 不存在则自动创建
+   */
+  private updateSettings(req: express.Request, res: express.Response): void {
+    const { outputDir } = req.body || {};
+
+    if (outputDir === undefined) {
+      res.status(400).json({ error: 'outputDir 字段缺失' });
+      return;
+    }
+
+    if (outputDir === '') {
+      // 恢复默认
+      this.settings = {};
+      this.saveSettings();
+      res.json({ success: true, outputDir: '', message: '已恢复默认输出目录' });
+      return;
+    }
+
+    if (typeof outputDir !== 'string') {
+      res.status(400).json({ error: 'outputDir 必须是字符串' });
+      return;
+    }
+
+    const trimmed = outputDir.trim();
+    // 必须先对原始输入判断, path.resolve 会把相对路径转成绝对路径绕过校验
+    if (!trimmed || !path.isAbsolute(trimmed)) {
+      res.status(400).json({ error: '输出目录必须是绝对路径' });
+      return;
+    }
+
+    const resolved = path.resolve(trimmed);
+
+    try {
+      fs.mkdirSync(resolved, { recursive: true });
+    } catch (error) {
+      res.status(400).json({ error: '目录无法创建: ' + (error as Error).message });
+      return;
+    }
+
+    this.settings = { outputDir: resolved };
+    this.saveSettings();
+    res.json({ success: true, outputDir: resolved });
   }
 
   private async compileFolderWxapkg(req: express.Request, res: express.Response): Promise<void> {
@@ -1130,7 +1228,7 @@ export class WorkspaceServer {
 
       // 创建执行会话
       const executionId = this.generateId();
-      const outputPath = path.join(workspace.path, 'OUTPUT');
+      const outputPath = this.getOutputPath(workspace);
 
       // 确保输出目录存在
       if (!fs.existsSync(outputPath)) {
@@ -1293,7 +1391,7 @@ export class WorkspaceServer {
       console.log(`[批量反编译] 工作区 ${id} 找到 ${wxapkgFiles.length} 个文件:`, wxapkgFiles.map(f => path.basename(f)));
 
       // 创建输出目录
-      const outputPath = path.join(workspace.path, 'OUTPUT');
+      const outputPath = this.getOutputPath(workspace);
       if (!fs.existsSync(outputPath)) {
         fs.mkdirSync(outputPath, { recursive: true });
       }
