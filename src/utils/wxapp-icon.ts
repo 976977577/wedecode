@@ -92,8 +92,37 @@ function deriveAppletRoot(storagePath: string): string | null {
   return null;
 }
 
+/* ---------------------------------- 兜底目录缓存 ---------------------------------- */
+
+/**
+ * 兜底模式是 /Users/*、C:/Users/* 这类全盘通配, 实测 4 个模式共约 55ms,
+ * 而图标目录位置基本不变 —— 缓存起来, 不必每次扫描都重跑一遍全盘 glob。
+ */
+const FALLBACK_DIRS_TTL_MS = 10 * 60 * 1000;
+let fallbackDirsCache: { at: number; dirs: string[] } | null = null;
+
+/** glob 异步接口 + 多模式并发, 避免同步遍历阻塞事件循环 */
+async function globFallbackIconDirs(): Promise<string[]> {
+  const now = Date.now();
+  if (fallbackDirsCache && now - fallbackDirsCache.at < FALLBACK_DIRS_TTL_MS) {
+    return fallbackDirsCache.dirs;
+  }
+  const results = await Promise.all(
+    platformIconDirPatterns().map(async pattern => {
+      try {
+        return await glob(pattern, { dot: true, windowsPathsNoEscape: true, nocase: true });
+      } catch {
+        return [] as string[];   // 路径不可读时忽略该模式
+      }
+    })
+  );
+  const dirs = [...new Set(results.flat())];
+  fallbackDirsCache = { at: now, dirs };
+  return dirs;
+}
+
 /** 收集所有可能存放图标的目录(去重, 且仅保留真实存在的目录) */
-function collectIconDirs(scanStoragePaths: string[]): string[] {
+async function collectIconDirs(scanStoragePaths: string[]): Promise<string[]> {
   const dirSet = new Set<string>();
 
   // 1) 从实际扫到的包路径推导 —— 最可靠, 天然跟随微信版本变化
@@ -103,26 +132,23 @@ function collectIconDirs(scanStoragePaths: string[]): string[] {
     ['icon', 'icons', 'Icon'].forEach(name => dirSet.add(path.join(appletRoot, name)));
   });
 
-  // 2) 已知位置模式兜底 —— 处理推导不出来或目录名不同的情况
-  platformIconDirPatterns().forEach(pattern => {
-    try {
-      glob.globSync(pattern, { dot: true, windowsPathsNoEscape: true, nocase: true })
-        .forEach(dir => dirSet.add(dir));
-    } catch {
-      // glob 在路径不可读时可能抛错, 忽略即可
-    }
-  });
+  // 2) 已知位置模式兜底 —— 处理推导不出来或目录名不同的情况(带缓存)
+  (await globFallbackIconDirs()).forEach(dir => dirSet.add(dir));
 
   // 必须真的能列举才算可用: 某些系统(如 macOS 未授权完全磁盘访问时)
   // stat 能过但 readdir 会被 EPERM 拒绝, 这类目录留着只会让诊断信息失真
-  return [...dirSet].filter(dir => {
-    try {
-      fs.readdirSync(dir);
-      return true;
-    } catch {
-      return false;
-    }
-  });
+  const candidates = [...dirSet];
+  const readable = await Promise.all(
+    candidates.map(async dir => {
+      try {
+        await fs.promises.readdir(dir);
+        return true;
+      } catch {
+        return false;
+      }
+    })
+  );
+  return candidates.filter((_, i) => readable[i]);
 }
 
 /**
@@ -131,22 +157,24 @@ function collectIconDirs(scanStoragePaths: string[]): string[] {
  * @param scanStoragePaths 本次扫描得到的包所在目录, 用于推导 applet 根目录
  * @returns 索引, 以及用于诊断的目录清单
  */
-export function buildAppletIconIndex(scanStoragePaths: string[] = []): {
+export async function buildAppletIconIndex(scanStoragePaths: string[] = []): Promise<{
   index: Map<string, string>;
   dirs: string[];
-} {
-  const dirs = collectIconDirs(scanStoragePaths);
+}> {
+  const dirs = await collectIconDirs(scanStoragePaths);
   const index = new Map<string, string>();
 
-  dirs.forEach(dir => {
+  // 各目录并行列举。注意: 只有在同一 appid 撞车时才 stat 比 mtime,
+  // 正常情况下 0 次额外 stat(实测 33 个图标文件的全量 stat 也就 0.1ms, 但没必要做)
+  await Promise.all(dirs.map(async dir => {
     let entries: fs.Dirent[] = [];
     try {
-      entries = fs.readdirSync(dir, { withFileTypes: true });
+      entries = await fs.promises.readdir(dir, { withFileTypes: true });
     } catch {
       return;
     }
 
-    entries.forEach(entry => {
+    await Promise.all(entries.map(async entry => {
       if (!entry.isFile() || !isImageFile(entry.name)) return;
       const appid = extractAppIdFromIconName(entry.name);
       if (!appid) return;
@@ -159,14 +187,16 @@ export function buildAppletIconIndex(scanStoragePaths: string[] = []): {
       }
       // 同一 appid 存在多份缓存时, 保留修改时间较新的那份
       try {
-        if (fs.statSync(filePath).mtimeMs > fs.statSync(previous).mtimeMs) {
-          index.set(appid, filePath);
-        }
+        const [curMtime, prevMtime] = await Promise.all([
+          fs.promises.stat(filePath).then(s => s.mtimeMs).catch(() => 0),
+          fs.promises.stat(previous).then(s => s.mtimeMs).catch(() => 0)
+        ]);
+        if (curMtime > prevMtime) index.set(appid, filePath);
       } catch {
         // 读取失败时保留已有项
       }
-    });
-  });
+    }));
+  }));
 
   return { index, dirs };
 }
@@ -177,22 +207,23 @@ let cachedIndex: Map<string, string> | null = null;
 let cachedDirs: string[] = [];
 
 /** 重建图标索引(每次扫描后调用, 以便跟随实际扫到的路径推导) */
-export function refreshAppletIconIndex(scanStoragePaths: string[] = []): void {
-  const { index, dirs } = buildAppletIconIndex(scanStoragePaths);
+export async function refreshAppletIconIndex(scanStoragePaths: string[] = []): Promise<void> {
+  const { index, dirs } = await buildAppletIconIndex(scanStoragePaths);
   cachedIndex = index;
   cachedDirs = dirs;
 }
 
 /** 查询本地图标路径, 未命中返回 null */
-export function getAppletIconPath(appid: string): string | null {
+export async function getAppletIconPath(appid: string): Promise<string | null> {
   if (!cachedIndex) {
     // 尚未扫描过(例如直接访问图标接口), 用兜底模式建一次
-    refreshAppletIconIndex();
+    await refreshAppletIconIndex();
   }
   const target = cachedIndex?.get(appid);
   if (!target) return null;
   try {
-    return fs.existsSync(target) ? target : null;
+    await fs.promises.access(target, fs.constants.R_OK);
+    return target;
   } catch {
     return null;
   }

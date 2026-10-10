@@ -24,13 +24,15 @@ function inDangerScanPathList(_path: string) {
 /**
  * 通过指定的目录找到该目录下子目录中的所有小程序包
  * */
-function findWxMiniProgramPackDir(manualScanPath: string) {
+async function findWxMiniProgramPackDir(manualScanPath: string): Promise<SacnPackagesPathItem[]> {
   const foundPackageList: SacnPackagesPathItem[] = []
-  glob.globSync(path.resolve(manualScanPath, '**/*.wxapkg'), {
+  // 异步 glob: 同步版本会把整个 Node 事件循环堵住(实测扫描期间其它接口延迟翻 11 倍)
+  const matchedPaths = await glob(path.resolve(manualScanPath, '**/*.wxapkg'), {
     dot: true,
     windowsPathsNoEscape: true,
     nocase: true
   })
+  matchedPaths
     .map((_path) => {
       const foundMainPackage = AppMainPackageNames.find(fileName => _path.endsWith(fileName))
       if (foundMainPackage) return _path
@@ -69,29 +71,29 @@ function findWxMiniProgramPackDir(manualScanPath: string) {
  * 与 CLI 交互流程解耦 —— 不弹提示、不清屏、不退出进程,
  * 因此可以被 Web/桌面端直接调用。返回值按修改时间倒序。
  * */
-export function scanPackagesPure(manualScanPath: string = ''): SacnPackagesPathItem[] {
+export async function scanPackagesPure(manualScanPath: string = ''): Promise<SacnPackagesPathItem[]> {
   const scanPathList: string[] = manualScanPath.trim()
     ? [path.resolve(manualScanPath)]
     : globPathList
 
-  const foundPackageList: SacnPackagesPathItem[] = []
-  scanPathList.forEach(matchPath => {
-    findWxMiniProgramPackDir(matchPath).forEach(item => foundPackageList.push(item))
-  })
+  // 多个候选路径并发扫描: 墙钟时间取决于最慢的那一个, 而不是全部相加
+  const foundPackageList: SacnPackagesPathItem[] = (
+    await Promise.all(scanPathList.map(matchPath => findWxMiniProgramPackDir(matchPath)))
+  ).flat()
+
+  // 每个包只 stat 一次, 结果挂在 item.mtimeMs 上供排序与展示复用
+  await Promise.all(foundPackageList.map(async item => {
+    try {
+      const stat = await fs.promises.stat(item.storagePath)
+      item.mtimeMs = stat.mtimeMs
+    } catch {
+      // 目录可能已被清理, 保持 0 排在末尾
+      item.mtimeMs = 0
+    }
+  }))
 
   // 按包所在目录的修改时间倒序(最近用过的排前面)
-  return [...foundPackageList]
-    .map(item => {
-      let mtimeMs = 0
-      try {
-        mtimeMs = fs.statSync(item.storagePath).mtimeMs
-      } catch {
-        // 目录可能已被清理, 保持 0 排在末尾
-      }
-      return { item, mtimeMs }
-    })
-    .sort((a, b) => b.mtimeMs - a.mtimeMs)
-    .map(({ item }) => item)
+  return foundPackageList.sort((a, b) => (b.mtimeMs ?? 0) - (a.mtimeMs ?? 0))
 }
 
 /**
@@ -118,21 +120,17 @@ export async function scanPackagesForDisplay(manualScanPath: string = ''): Promi
     ? [path.resolve(manualScanPath)]
     : globPathList
 
-  const list = scanPackagesPure(manualScanPath)
+  const list = await scanPackagesPure(manualScanPath)
 
   // 建立本地图标索引(纯本地, 不联网)。必须放在扫描之后,
   // 因为图标目录是从实际扫到的包路径向上推导出来的。
-  refreshAppletIconIndex(list.map(item => item.storagePath))
+  await refreshAppletIconIndex(list.map(item => item.storagePath))
 
   // 昵称的唯一来源是第三方付费查询接口, 本项目不接入, 故展示名就是 appid。
   // 整个扫描过程纯本地、不发任何网络请求。
-  const packages = list.map(item => {
-    let mtime = new Date()
-    try {
-      mtime = fs.statSync(item.storagePath).mtime
-    } catch {
-      // 目录可能已被清理
-    }
+  const packages = await Promise.all(list.map(async item => {
+    // 复用扫描时 stat 到的 mtime, 不再二次 stat
+    const mtime = item.mtimeMs ? new Date(item.mtimeMs) : new Date()
     return {
       appId: item.appId,
       storagePath: item.storagePath,
@@ -141,9 +139,9 @@ export async function scanPackagesForDisplay(manualScanPath: string = ''): Promi
       updateDate: `${mtime.getMonth() + 1}/${mtime.getDate()} ${mtime.toLocaleTimeString()}`,
       description: item.storagePath,
       nameResolved: false,
-      hasIcon: Boolean(getAppletIconPath(item.appId))
+      hasIcon: Boolean(await getAppletIconPath(item.appId))
     }
-  })
+  }))
 
   return {
     packages,
@@ -173,10 +171,10 @@ async function sacnPackages(manualScanPath: string = ''): Promise<SacnPackagesPa
     console.log(' 扫描中...')
   }
 
-  scanPathList.forEach(matchPath => {
-    const foundPList = findWxMiniProgramPackDir(matchPath)
-    foundPList.forEach(item => foundPackageList.push(item))
-  })
+  const scanResults = await Promise.all(
+    scanPathList.map(matchPath => findWxMiniProgramPackDir(matchPath))
+  )
+  scanResults.forEach(foundPList => foundPList.forEach(item => foundPackageList.push(item)))
   // console.log(foundPackageList)
 
   if (foundPackageList.length === 0) {
@@ -198,12 +196,20 @@ async function sacnPackages(manualScanPath: string = ''): Promise<SacnPackagesPa
  * */
 export async function startSacnPackagesProcess(manualScanPath?: string): Promise<ScanPackagesResultInfo> {
   const foundPackageList: SacnPackagesPathItem[] = await sacnPackages(manualScanPath)
-  const sortedPackageList = [...foundPackageList]
-    .map(item => ({
-      item,
-      statInfo: fs.statSync(item.storagePath)
-    }))
-    .sort((a, b) => b.statInfo.mtimeMs - a.statInfo.mtimeMs)
+  const sortedPackageList = (await Promise.all(
+    foundPackageList.map(async item => {
+      // 扫描阶段已经 stat 过就直接用, 没有才补一次
+      let mtimeMs = item.mtimeMs ?? 0
+      if (!mtimeMs) {
+        try {
+          mtimeMs = (await fs.promises.stat(item.storagePath)).mtimeMs
+        } catch {
+          mtimeMs = 0
+        }
+      }
+      return { item, mtimeMs }
+    })
+  )).sort((a, b) => b.mtimeMs - a.mtimeMs)
   // console.log(foundPackageList)
   const columns = [
     {
@@ -220,8 +226,8 @@ export async function startSacnPackagesProcess(manualScanPath?: string): Promise
     },
   ]
   const rows = sortedPackageList
-    .map(({ item, statInfo }) => {
-      const date = new Date(statInfo.mtime)
+    .map(({ item, mtimeMs }) => {
+      const date = new Date(mtimeMs)
       // 昵称需付费接口查询, 本项目不接入, 展示名直接用 appid
       return {
         appName: item.appId,

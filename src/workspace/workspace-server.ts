@@ -535,7 +535,7 @@ export class WorkspaceServer {
       return;
     }
 
-    const iconPath = getAppletIconPath(appid);
+    const iconPath = await getAppletIconPath(appid);
     if (!iconPath) {
       res.status(404).json({ error: '本地缓存中无该小程序图标' });
       return;

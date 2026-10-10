@@ -102,6 +102,8 @@ export type SacnPackagesPathItem = {
   appId: string;
   path: string;
   storagePath: string;
+  /** 包目录的最后修改时间(ms), 扫描时顺带 stat 出来, 供排序与展示复用, 避免重复 stat */
+  mtimeMs?: number;
 }
 
 export type PackageInfoResult = {
