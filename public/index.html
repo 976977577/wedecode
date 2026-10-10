@@ -75,62 +75,9 @@
             margin-bottom: 30px;
         }
 
-        .main-content {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 30px;
-            margin-bottom: 30px;
-        }
-
-        .upload-section {
-            text-align: center;
-        }
-
-        .upload-area {
-            border: 3px dashed #667eea;
-            border-radius: 15px;
-            padding: 40px 20px;
-            margin-bottom: 20px;
-            background: #f8f9ff;
-            transition: all 0.3s ease;
-            cursor: pointer;
-        }
-
-        .upload-area:hover {
-            border-color: #764ba2;
-            background: #f0f2ff;
-        }
-
-        .upload-area.dragover {
-            border-color: #764ba2;
-            background: #e8ebff;
-            transform: scale(1.02);
-        }
-
-        .upload-icon {
-            font-size: 3em;
-            color: #667eea;
-            margin-bottom: 15px;
-        }
-
-        .upload-text {
-            font-size: 1.1em;
-            color: #333;
-            margin-bottom: 8px;
-        }
-
-        .upload-hint {
-            color: #666;
-            font-size: 0.9em;
-        }
-
-        .file-input {
-            display: none;
-        }
-
         /* ---- 本机包扫描 ---- */
-        .scan-panel {
-            margin-top: 20px;
+        .scan-only {
+            margin: 20px 0 24px;
             border: 1px solid #e0e0e0;
             border-radius: 12px;
             overflow: hidden;
@@ -265,70 +212,6 @@
             margin-top: 10px;
             color: #4a4a4a;
             font-size: 0.9em;
-        }
-
-        .config-section {
-            text-align: left;
-        }
-
-        .config-title {
-            font-size: 1.3em;
-            font-weight: bold;
-            color: #333;
-            margin-bottom: 20px;
-            text-align: center;
-        }
-
-        .config-group {
-            margin-bottom: 20px;
-        }
-
-        .config-label {
-            display: block;
-            font-weight: 600;
-            color: #555;
-            margin-bottom: 8px;
-        }
-
-        .config-input {
-            width: 100%;
-            padding: 10px;
-            border: 2px solid #e1e5e9;
-            border-radius: 8px;
-            font-size: 0.9em;
-            transition: border-color 0.3s ease;
-        }
-
-        .config-input:focus {
-            outline: none;
-            border-color: #667eea;
-        }
-
-        .config-checkbox {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            margin-bottom: 10px;
-        }
-
-        .config-checkbox input[type="checkbox"] {
-            width: 18px;
-            height: 18px;
-            accent-color: #667eea;
-        }
-
-        .config-checkbox label {
-            font-size: 0.9em;
-            color: #555;
-            cursor: pointer;
-        }
-
-        .config-description {
-            font-size: 0.8em;
-            color: #888;
-            margin-top: 5px;
-            margin-left: 28px;
-            line-height: 1.4;
         }
 
         .buttons {
@@ -609,9 +492,6 @@
         }
 
         @media (max-width: 768px) {
-            .main-content {
-                grid-template-columns: 1fr;
-            }
             
             .container {
                 padding: 20px;
@@ -639,72 +519,19 @@
             <div class="subtitle">微信小程序反编译工具</div>
         </div>
 
-        <div class="main-content">
-            <div class="upload-section">
-                <div class="upload-area" id="uploadArea">
-                    <div class="upload-icon">
-                        <i class="fas fa-cloud-upload-alt"></i>
-                    </div>
-                    <div class="upload-text" id="uploadText">拖拽包含 wxapkg 的文件夹到此处</div>
-                    <div class="upload-hint" id="uploadHint">或点击选择文件/文件夹上传</div>
-                    <input type="file" id="multiFileInput" class="file-input" accept=".wxapkg" multiple style="display: none;">
-                    <input type="file" id="folderInput" class="file-input" webkitdirectory directory allowdirs multiple style="display: none;">
-                </div>
-
-                <!-- 本机已安装的小程序包扫描 -->
-                <div class="scan-panel">
-                    <div class="scan-head">
-                        <i class="fas fa-magnifying-glass" style="color:#667eea;"></i>
-                        <span class="scan-title">扫描本机小程序包</span>
-                        <button type="button" class="scan-btn" id="scanBtn">
-                            <i class="fas fa-radar"></i> 开始扫描
-                        </button>
-                    </div>
-                    <div class="scan-body" id="scanBody" style="display:none;"></div>
-                </div>
+        <!-- 主区: 仅保留本机包扫描 -->
+        <div class="scan-only">
+            <div class="scan-head">
+                <i class="fas fa-magnifying-glass" style="color:#667eea;"></i>
+                <span class="scan-title">扫描本机小程序包</span>
+                <button type="button" class="scan-btn" id="scanBtn">
+                    <i class="fas fa-radar"></i> 开始扫描
+                </button>
             </div>
-
-            <div class="config-section">
-                <div class="config-title">
-                    <i class="fas fa-cog"></i> 反编译配置
-                </div>
-
-                <div class="config-group">
-                    <label class="config-label" for="wxidInput">微信小程序 WXID</label>
-                    <div style="display: flex; align-items: center; gap: 10px;">
-                        <input type="text" id="wxidInput" class="config-input" placeholder="输入小程序的 WXID (可选)" style="flex: 1;">
-                        <div class="config-checkbox" style="margin: 0; white-space: nowrap;">
-                            <input type="checkbox" id="skipWxid">
-                            <label for="skipWxid">不使用 WXID</label>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="config-group">
-                    <div class="config-checkbox" style="margin-bottom: 10px;">
-                        <input type="checkbox" id="usePx">
-                        <label for="usePx">使用 px 单位 (--px)</label>
-                        <span style="font-size: 0.8em; color: #888; margin-left: 15px;">默认 rpx，勾选后使用 px</span>
-                    </div>
-                    
-                    <div class="config-checkbox" style="margin-bottom: 10px;">
-                        <input type="checkbox" id="unpackOnly">
-                        <label for="unpackOnly">仅解包不反编译 (--unpack-only)</label>
-                        <span style="font-size: 0.8em; color: #888; margin-left: 15px;">只解压文件，不反编译代码</span>
-                    </div>
-                </div>
-            </div>
+            <div class="scan-body" id="scanBody" style="display:none;"></div>
         </div>
 
         <div class="buttons">
-            <button class="btn btn-primary" id="uploadBtn" disabled>
-                <i class="fas fa-play"></i>
-                开始反编译
-            </button>
-            <button class="btn btn-secondary" id="folderCompileBtn" disabled style="display: none;">
-                <i class="fas fa-folder-open"></i>
-                文件夹编译
-            </button>
             <button class="btn btn-secondary" id="downloadBtn" disabled>
                 <i class="fas fa-download"></i>
                 下载结果
@@ -815,14 +642,6 @@
                 </div>
                 
                 <div style="text-align: center;">
-                    <button class="btn btn-primary" id="startFolderCompile" style="margin-right: 10px;">
-                        <i class="fas fa-play"></i>
-                        开始编译
-                    </button>
-                    <button class="btn btn-secondary" id="cancelFolderCompile">
-                        <i class="fas fa-times"></i>
-                        取消
-                    </button>
                 </div>
             </div>
         </div>
