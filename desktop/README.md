@@ -50,18 +50,21 @@ pnpm build:dmg      # → release/Wedecode-0.1.0.dmg
 
 | 点 | 做法 | 原因 |
 |---|---|---|
-| 端口 | `findFreePort(3000)` 递增探测空闲端口 | 避免与用户已开的 `wedecode ui` 服务冲突 |
+| 端口 | 构造前`isPortFree()` 预检, 3000-3049 逐个顺延 | 服务内部 WebSocket 监听失败抛的是 EventEmitter `'error'` 事件, `try/catch` 抓不到, 必须提前规避 |
+| 窗口尺寸 | `minWidth420 / minHeight 360`,并记忆上次尺寸 | 桌面工具需适配小屏与分屏;记忆位置存`userData/window-state.json` |
 | 就绪等待 | 轮询 `/api/health` 直到返回 200 | 避免窗口先显示白屏 |
 | 工作区目录 | `app.getPath('userData')/workspaces` | 放在系统应用数据目录,不污染项目 |
 | 进程模型 | 关闭窗口即 `app.quit()` | 桌面应用不应在后台常驻 |
 | 单实例 | `requestSingleInstanceLock` | 重复启动时聚焦已有窗口 |
 | 外部链接 | `setWindowOpenHandler` 转系统浏览器 | 防止在应用内开新窗口 |
 | 路径兼容 | 开发态回溯 `__dirname` 上级, 打包态用 `process.resourcesPath` | 两种形态产物位置不同 |
+| 构造函数解析 | 按实例方法签名识别, 不硬编码类名 | vite 压缩后 `workspace-server.js` 导出键仅 `['W']` |
 
 ## 文件说明
 
 - `main.js` — 主进程:选端口、拉服务、开窗口、生命周期管理
 - `preload.cjs` — contextBridge 安全桥,仅暴露必要原生能力
+- `store.cjs` — 界面偏好持久化(目前存窗口尺寸)
 - `package.json` — Electron 与 electron-builder 配置
 - `pnpm-workspace.yaml` — pnpm 12 构建脚本白名单(与父目录同名文件内容一致)
 

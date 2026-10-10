@@ -27,6 +27,7 @@
     "files": [
       "main.js",
       "preload.cjs",
+      "store.cjs",
       "!**/*.map"
     ],
     "extraResources": [

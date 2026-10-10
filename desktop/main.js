@@ -12,6 +12,7 @@ const { app, BrowserWindow, shell, dialog, Menu, ipcMain } = require('electron')
 const path = require('node:path')
 const fs = require('node:fs')
 const http = require('node:http')
+const store = require('./store.cjs')
 
 // electron-builder 打包后:
 //   __dirname         = Contents/Resources/app.asar (仅含 main.js / preload.cjs)
@@ -130,11 +131,18 @@ function findByShape (mod) {
 }
 
 function createWindow (port) {
+  const saved = store.get('windowBounds') || { width: 1280, height: 900 }
+
   mainWindow = new BrowserWindow({
-    width: 1280,
-    height: 900,
-    minWidth: 960,
-    minHeight: 640,
+    width: saved.width,
+    height: saved.height,
+    x: saved.x,
+    y: saved.y,
+    minWidth: 420,
+    minHeight: 360,
+    resizable: true,
+    maximizable: true,
+    fullscreenable: true,
     title: 'Wedecode',
     backgroundColor: '#667eea',
     show: false,
@@ -149,6 +157,16 @@ function createWindow (port) {
   })
 
   mainWindow.loadURL(`http://127.0.0.1:${port}/`)
+
+  // 记住上次窗口尺寸: 用户调整后持久化, 下次启动恢复。
+  // 仅在非最小化/最大化状态下记录, 避免把最大化尺寸存进去。
+  const saveBounds = () => {
+    if (!mainWindow || mainWindow.isMinimized() || mainWindow.isMaximized()) return
+    store.set('windowBounds', mainWindow.getNormalBounds())
+  }
+  mainWindow.on('resized', saveBounds)
+  mainWindow.on('moved', saveBounds)
+  mainWindow.on('close', saveBounds)
 
   mainWindow.once('ready-to-show', () => {
     mainWindow.show()
