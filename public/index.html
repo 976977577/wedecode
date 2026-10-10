@@ -21,7 +21,31 @@
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            padding: 20px;
+            padding: 46px 20px 20px;
+        }
+
+        /* macOS Electron: titleBarStyle:hidden 后原生标题栏不可拖,
+           在页面顶部开一条拖动区, 避开左上角红绿灯按钮 */
+        .drag-strip {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 38px;
+            -webkit-app-region: drag;
+            z-index: 9999;
+        }
+
+        /* 交互元素必须显式声明 no-drag, 否则按钮点不动 */
+        .container,
+        .container button,
+        .container input,
+        .container a,
+        .container li,
+        .container .scan-list,
+        .log-container,
+        .modal-content {
+            -webkit-app-region: no-drag;
         }
 
         .container {
@@ -606,6 +630,7 @@
     </style>
 </head>
 <body>
+    <div class="drag-strip"></div>
     <div class="container">
         <div class="header">
             <div class="logo">

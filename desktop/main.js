@@ -146,8 +146,10 @@ function createWindow (port) {
     title: 'Wedecode',
     backgroundColor: '#667eea',
     show: false,
-    // macOS 隐藏标题栏红绿灯, 保留窗口控制(用titleBarStyle 而不是 frame:false)
-    titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
+    // hiddenInset 会连标题栏的可拖动区域一起隐藏, 导致窗口无法拖动。
+    // 改用 hidden: 红绿灯按钮保留, 页面顶部通过 -webkit-app-region: drag 提供拖动区。
+    titleBarStyle: process.platform === 'darwin' ? 'hidden' : 'default',
+    trafficLightPosition: { x: 14, y: 14 },
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
