@@ -104,6 +104,143 @@
             display: none;
         }
 
+        /* ---- 本机包扫描 ---- */
+        .scan-panel {
+            margin-top: 20px;
+            border: 1px solid #e0e0e0;
+            border-radius: 12px;
+            overflow: hidden;
+            text-align: left;
+        }
+
+        .scan-head {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 14px;
+            background: #f8f9ff;
+            border-bottom: 1px solid #ececec;
+        }
+
+        .scan-title {
+            flex: 1;
+            font-size: 0.95em;
+            color: #333;
+            font-weight: 500;
+        }
+
+        .scan-btn {
+            border: none;
+            background: #667eea;
+            color: #fff;
+            padding: 7px 14px;
+            border-radius: 8px;
+            font-size: 0.85em;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-family: inherit;
+        }
+
+        .scan-btn:hover:not(:disabled) {
+            background: #764ba2;
+        }
+
+        .scan-btn:disabled {
+            opacity: 0.55;
+            cursor: not-allowed;
+        }
+
+        .scan-body {
+            padding: 12px 14px;
+            font-size: 0.88em;
+        }
+
+        .scan-hint {
+            color: #b06a00;
+            background: #fff8e6;
+            border: 1px solid #ffe4a3;
+            border-radius: 8px;
+            padding: 10px 12px;
+            line-height: 1.6;
+        }
+
+        .scan-hint code {
+            background: #f1f1f1;
+            padding: 1px 5px;
+            border-radius: 4px;
+            font-size: 0.92em;
+        }
+
+        .scan-paths {
+            margin-top: 10px;
+            color: #888;
+            font-size: 0.92em;
+            line-height: 1.7;
+            word-break: break-all;
+        }
+
+        .scan-list {
+            list-style: none;
+            max-height: 260px;
+            overflow-y: auto;
+        }
+
+        .scan-list-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 8px;
+            border-bottom: 1px solid #f0f0f0;
+            cursor: pointer;
+        }
+
+        .scan-list-item:last-child {
+            border-bottom: none;
+        }
+
+        .scan-list-item:hover {
+            background: #f8f9ff;
+        }
+
+        .scan-list-item.selected {
+            background: #eef0ff;
+        }
+
+        .scan-item-main {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .scan-item-name {
+            color: #333;
+            margin-bottom: 3px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .scan-item-meta {
+            color: #888;
+            font-size: 0.9em;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .scan-item-date {
+            color: #666;
+            font-size: 0.9em;
+            white-space: nowrap;
+        }
+
+        .scan-selected-tip {
+            margin-top: 10px;
+            color: #4a4a4a;
+            font-size: 0.9em;
+        }
+
         .config-section {
             text-align: left;
         }
@@ -485,6 +622,18 @@
                     <div class="upload-hint" id="uploadHint">或点击选择文件/文件夹上传</div>
                     <input type="file" id="multiFileInput" class="file-input" accept=".wxapkg" multiple style="display: none;">
                     <input type="file" id="folderInput" class="file-input" webkitdirectory directory allowdirs multiple style="display: none;">
+                </div>
+
+                <!-- 本机已安装的小程序包扫描 -->
+                <div class="scan-panel">
+                    <div class="scan-head">
+                        <i class="fas fa-magnifying-glass" style="color:#667eea;"></i>
+                        <span class="scan-title">扫描本机小程序包</span>
+                        <button type="button" class="scan-btn" id="scanBtn">
+                            <i class="fas fa-radar"></i> 开始扫描
+                        </button>
+                    </div>
+                    <div class="scan-body" id="scanBody" style="display:none;"></div>
                 </div>
             </div>
 

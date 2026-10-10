@@ -7,6 +7,7 @@ import { WebSocketServer } from 'ws';
 import { createServer } from 'node:http';
 import { spawn, ChildProcess } from 'node:child_process';
 import { fileURLToPath } from 'url';
+import { scanPackagesForDisplay } from '@/bin/wedecode/scan';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -164,6 +165,9 @@ export class WorkspaceServer {
     this.app.get('/api/health', (req, res) => {
       res.json({ status: 'ok', timestamp: new Date().toISOString() });
     });
+
+    // 扫描本机小程序包(纯查询, 无副作用)
+    this.app.get('/api/scan', this.scanPackages.bind(this));
 
     // 提供前端页面
     this.app.get('/', (req, res) => {
@@ -388,6 +392,48 @@ export class WorkspaceServer {
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({ error: 'Failed to delete workspace' });
+    }
+  }
+
+  /**
+   * 扫描本机小程序包。
+   *
+   * GET /api/scan          → 用默认的微信包路径扫描
+   * GET /api/scan?path=... → 扫描指定目录
+   *
+   * 纯查询, 不弹出任何交互提示, 也不会清屏或退出进程。
+   * */
+  private async scanPackages(req: express.Request, res: express.Response): Promise<void> {
+    try {
+      const manualPath = String(req.query.path || '').trim();
+
+      // 指定目录时先确认可读, 避免 glob 在无效路径上空转
+      if (manualPath) {
+        const resolved = path.resolve(manualPath);
+        if (!fs.existsSync(resolved)) {
+          res.status(400).json({ error: '目录不存在', path: resolved });
+          return;
+        }
+      }
+
+      const { packages, scannedPathList } = await scanPackagesForDisplay(manualPath);
+
+      res.json({
+        success: true,
+        count: packages.length,
+        packages,
+        scannedPathList,
+        // 扫不到时给出可操作的原因, 便于界面展示
+        hint: packages.length === 0
+          ? '未找到小程序包。请先在微信中打开任意小程序产生缓存, 然后重新扫描。'
+          : ''
+      });
+    } catch (error) {
+      console.error('扫描失败:', error);
+      res.status(500).json({
+        error: '扫描失败',
+        message: error instanceof Error ? error.message : String(error)
+      });
     }
   }
 

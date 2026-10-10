@@ -64,6 +64,100 @@ function findWxMiniProgramPackDir(manualScanPath: string) {
 }
 
 /**
+ * 纯扫描: 在给定目录(或默认的微信包路径)下查找所有小程序主包。
+ *
+ * 与 CLI 交互流程解耦 —— 不弹提示、不清屏、不退出进程,
+ * 因此可以被 Web/桌面端直接调用。返回值按修改时间倒序。
+ * */
+export function scanPackagesPure(manualScanPath: string = ''): SacnPackagesPathItem[] {
+  const scanPathList: string[] = manualScanPath.trim()
+    ? [path.resolve(manualScanPath)]
+    : globPathList
+
+  const foundPackageList: SacnPackagesPathItem[] = []
+  scanPathList.forEach(matchPath => {
+    findWxMiniProgramPackDir(matchPath).forEach(item => foundPackageList.push(item))
+  })
+
+  // 按包所在目录的修改时间倒序(最近用过的排前面)
+  return [...foundPackageList]
+    .map(item => {
+      let mtimeMs = 0
+      try {
+        mtimeMs = fs.statSync(item.storagePath).mtimeMs
+      } catch {
+        // 目录可能已被清理, 保持 0 排在末尾
+      }
+      return { item, mtimeMs }
+    })
+    .sort((a, b) => b.mtimeMs - a.mtimeMs)
+    .map(({ item }) => item)
+}
+
+/**
+ * 扫描包并附带展示信息(名字/时间/描述), 供界面列表直接渲染。
+ * 不包含任何交互式选择。
+ * */
+export async function scanPackagesForDisplay(manualScanPath: string = ''): Promise<{
+  packages: Array<{
+    appId: string
+    storagePath: string
+    isAppId: boolean
+    appName: string
+    updateDate: string
+    description: string
+  }>
+  scannedPathList: string[]
+}> {
+  const scanPathList: string[] = manualScanPath.trim()
+    ? [path.resolve(manualScanPath)]
+    : globPathList
+
+  const list = scanPackagesPure(manualScanPath)
+
+  const packages = await Promise.all(
+    list.map(async item => {
+      let mtime = new Date()
+      try {
+        mtime = fs.statSync(item.storagePath).mtime
+      } catch {
+      }
+      const updateDate = `${mtime.getMonth() + 1}/${mtime.getDate()} ${mtime.toLocaleTimeString()}`
+
+      if (!item.isAppId) {
+        return {
+          appId: item.appId,
+          storagePath: item.storagePath,
+          isAppId: false,
+          appName: item.appId,
+          updateDate,
+          description: item.storagePath
+        }
+      }
+      // 联网时补充昵称与描述; 失败或离线则退回 appId
+      let nickname = ''
+      let description = ''
+      try {
+        const info = await WxAppInfoUtils.getWxAppInfo(item.appId)
+        nickname = info?.nickname || ''
+        description = info?.description || ''
+      } catch {
+      }
+      return {
+        appId: item.appId,
+        storagePath: item.storagePath,
+        isAppId: true,
+        appName: nickname || item.appId,
+        updateDate,
+        description
+      }
+    })
+  )
+
+  return { packages, scannedPathList: scanPathList }
+}
+
+/**
  * 扫描小程序包 TODO 做降级方案， 如果扫描不到第一次的包，则扩大扫描范围
  * @param manualScanPath 手动输入的 wxapkg 包存放目录，不能是文件
  * */

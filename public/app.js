@@ -7,6 +7,8 @@ class WedecodeApp {
         this.isProcessing = false;
         this.fullLogHistory = []; // 存储完整日志历史
         this.processOutputHistory = []; // 存储反编译进程的详细输出
+        this.scanPackages = []; // 扫描到的小程序包
+        this.selectedScanPackage = null; // 用户选中的扫描包
         
         this.initializeElements();
         this.setupEventListeners();
@@ -25,6 +27,10 @@ class WedecodeApp {
         this.status = document.getElementById('status');
         this.logContent = document.getElementById('logContent');
         this.clearLogBtn = document.getElementById('clearLogBtn');
+
+        // 本机包扫描元素
+        this.scanBtn = document.getElementById('scanBtn');
+        this.scanBody = document.getElementById('scanBody');
         
         // 配置选项元素
         this.wxidInput = document.getElementById('wxidInput');
@@ -57,7 +63,109 @@ class WedecodeApp {
 
 
 
+    /**
+     * 扫描本机已安装的小程序包
+     *
+     * 调用 GET /api/scan, 该接口是纯查询: 不弹终端提示、不修改任何文件。
+     */
+    async handleScan() {
+        if (this.isScanning) return;
+        this.isScanning = true;
+        this.scanBtn.disabled = true;
+        this.scanBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 扫描中...';
+        this.scanBody.style.display = 'block';
+        this.scanBody.innerHTML = '<div style="color:#888;">正在扫描本机小程序缓存，请稍候...</div>';
+
+        try {
+            const res = await fetch('/api/scan');
+            const data = await res.json();
+
+            if (!res.ok || !data.success) {
+                this.renderScanError(data.message || data.error || '扫描失败');
+                return;
+            }
+            this.scanPackages = data.packages || [];
+            this.selectedScanPackage = null;
+            this.renderScanResult(data);
+        } catch (err) {
+            this.renderScanError(err.message || String(err));
+        } finally {
+            this.isScanning = false;
+            this.scanBtn.disabled = false;
+            this.scanBtn.innerHTML = '<i class="fas fa-radar"></i> 开始扫描';
+        }
+    }
+
+    renderScanError(message) {
+        this.scanBody.innerHTML = `<div class="scan-hint">扫描失败: ${this.escapeHtml(message)}</div>`;
+    }
+
+    renderScanResult(data) {
+        const packages = this.scanPackages;
+        const pathList = data.scannedPathList || [];
+
+        if (!packages.length) {
+            // 没扫到时把「为什么」和「怎么办」说清楚, 而不是只丢一个空列表
+            const pathsHtml = pathList.length
+                ? `<div class="scan-paths">已查找:<br>${pathList.map(p => `<code>${this.escapeHtml(p)}</code>`).join('<br>')}</div>`
+                : '';
+            this.scanBody.innerHTML = `
+                <div class="scan-hint">
+                    ${this.escapeHtml(data.hint || '未找到小程序包')}
+                    <br><br>
+                    小程序包是在用微信打开小程序后才缓存到本地的。如果路径与你的微信版本不符,
+                    可以在 GitHub 反馈你的微信版本号与实际缓存路径。
+                </div>
+                ${pathsHtml}
+            `;
+            return;
+        }
+
+        const items = packages.map((pkg, index) => `
+            <li class="scan-list-item" data-scan-index="${index}">
+                <div class="scan-item-main">
+                    <div class="scan-item-name">${this.escapeHtml(pkg.appName || pkg.appId)}</div>
+                    <div class="scan-item-meta">${this.escapeHtml(pkg.description || pkg.storagePath)}</div>
+                </div>
+                <div class="scan-item-date">${this.escapeHtml(pkg.updateDate)}</div>
+            </li>
+        `).join('');
+
+        this.scanBody.innerHTML = `
+            <div style="color:#666;margin-bottom:8px;">找到 ${packages.length} 个小程序包，点击可查看路径:</div>
+            <ul class="scan-list" id="scanList">${items}</ul>
+            <div class="scan-selected-tip" id="scanSelectedTip" style="display:none;"></div>
+        `;
+
+        this.scanBody.querySelectorAll('.scan-list-item').forEach(el => {
+            el.addEventListener('click', () => this.selectScanPackage(Number(el.dataset.scanIndex), el));
+        });
+    }
+
+    selectScanPackage(index, el) {
+        const pkg = this.scanPackages[index];
+        if (!pkg) return;
+        this.selectedScanPackage = pkg;
+
+        this.scanBody.querySelectorAll('.scan-list-item').forEach(n => n.classList.remove('selected'));
+        el.classList.add('selected');
+
+        const tip = document.getElementById('scanSelectedTip');
+        tip.style.display = 'block';
+        tip.innerHTML = `已选择 <strong>${this.escapeHtml(pkg.appName || pkg.appId)}</strong><br>
+            <span style="color:#888;">包目录: ${this.escapeHtml(pkg.storagePath)}</span>`;
+    }
+
+    escapeHtml(str) {
+        return String(str == null ? '' : str)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+
     setupEventListeners() {
+        // 本机包扫描按钮
+        this.scanBtn?.addEventListener('click', () => this.handleScan());
+
         // 文件上传区域事件
         this.uploadArea.addEventListener('click', () => {
             if (!this.isProcessing) {
