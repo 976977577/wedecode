@@ -157,20 +157,37 @@ class WedecodeApp {
 
         const items = packages.map((pkg, index) => {
             const name = pkg.appName || pkg.appId;
-            const iconText = pkg.nameResolved ? String(name).slice(0, 1) : 'wx';
+            const showRealName = Boolean(pkg.nameResolved && pkg.appName && pkg.appName !== pkg.appId);
+
+            // 确定性配色: 同一 appid 永远得到同一个渐变色, 长列表里靠颜色就能扫视定位
+            let hue = 0;
+            for (const ch of String(pkg.appId)) hue = (hue * 31 + ch.charCodeAt(0)) % 360;
+            const iconStyle = `background:linear-gradient(135deg,hsl(${hue},72%,58%),hsl(${(hue + 42) % 360},68%,46%))`;
+            // 没有真名时, 头像显示 appid 去掉 wx 前缀后的前两位, 比千篇一律的 "wx" 更可分辨
+            const iconText = showRealName
+                ? this.escapeHtml(String(name).trim().slice(0, 1).toUpperCase())
+                : (String(pkg.appId).replace(/^wx/i, '').slice(0, 2).toUpperCase() || 'WX');
+
+            // 第二行只放有信息量的内容: 版本号 + 时间(去秒)。
+            // 路径尾部就是 appid 本身, 平铺出来只是噪音, 完整路径挪到行悬浮提示。
+            const segs = String(pkg.storagePath).replace(/\/+$/, '').split('/');
+            const version = segs[segs.length - 1] || '1';
+            const shortTime = String(pkg.updateDate).replace(/:\d\d$/, '');
+
+            const nameHtml = showRealName
+                ? `${this.escapeHtml(name)}<span class="appid-sub">${this.escapeHtml(pkg.appId)}</span>`
+                : `<span class="appid-text">${this.escapeHtml(pkg.appId)}</span>`;
+
             return `
-            <li class="pkg-row">
-                <div class="pkg-icon">${this.escapeHtml(iconText)}</div>
+            <li class="pkg-row" title="${this.escapeHtml(pkg.storagePath)}">
+                <div class="pkg-icon" style="${iconStyle}">${this.escapeHtml(iconText)}</div>
                 <div class="pkg-main">
-                    <div class="pkg-name">
-                        ${this.escapeHtml(name)}
-                        ${pkg.isAppId && !pkg.nameResolved ? '<span class="name-tag">仅 appid</span>' : ''}
-                    </div>
-                    <div class="pkg-meta" title="${this.escapeHtml(pkg.storagePath)}">${this.escapeHtml(this.shortPath(pkg.storagePath))} · ${this.escapeHtml(pkg.updateDate)}</div>
+                    <div class="pkg-name">${nameHtml}</div>
+                    <div class="pkg-meta"><span class="ver">v${this.escapeHtml(version)}</span><span>${this.escapeHtml(shortTime)}</span></div>
                 </div>
                 <div class="pkg-side">
                     <span class="pkg-badge" title="点击查看反编译日志"></span>
-                    <button type="button" class="btn-primary btn-sm compile-btn">
+                    <button type="button" class="btn-decompile compile-btn">
                         <i class="fas fa-play"></i> 反编译
                     </button>
                 </div>
@@ -195,17 +212,6 @@ class WedecodeApp {
             });
             return { row, badge, compileBtn, session: null };
         });
-    }
-
-    /**
-     * 路径太长会挤掉时间列, 列表里只保留末两段 (appid / packages),
-     * 完整路径放在 title 悬浮提示里。
-     */
-    shortPath(fullPath, keep = 2) {
-        if (!fullPath) return '';
-        const parts = String(fullPath).split('/').filter(Boolean);
-        if (parts.length <= keep) return fullPath;
-        return '…/' + parts.slice(-keep).join('/');
     }
 
     /* ==================== 反编译 ==================== */

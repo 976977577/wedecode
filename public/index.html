@@ -205,35 +205,40 @@
 
         .pkg-list {
             list-style: none;
-            padding: 8px;
+            padding: 4px 10px;
         }
 
         .pkg-row {
             display: flex;
             align-items: center;
-            gap: 12px;
-            padding: 10px 12px;
-            border-radius: 12px;
+            gap: 14px;
+            padding: 12px;
             transition: background .12s ease;
+        }
+
+        .pkg-row + .pkg-row {
+            border-top: 1px solid var(--border);
         }
 
         .pkg-row:hover {
             background: #f7f8fc;
         }
 
+        /* 渐变背景色由 JS 按 appid 哈希内联提供, 同一包永远同一配色 */
         .pkg-icon {
-            width: 36px;
-            height: 36px;
-            border-radius: 10px;
-            background: #eef0ff;
-            color: var(--accent);
-            font-size: 0.9em;
-            font-weight: 600;
+            width: 40px;
+            height: 40px;
+            border-radius: 11px;
+            color: #fff;
+            font-size: .82em;
+            font-weight: 700;
+            letter-spacing: .5px;
             display: flex;
             align-items: center;
             justify-content: center;
             flex-shrink: 0;
             overflow: hidden;
+            text-shadow: 0 1px 2px rgba(0,0,0,.18);
         }
 
         .pkg-main {
@@ -242,31 +247,47 @@
         }
 
         .pkg-name {
-            font-weight: 500;
-            margin-bottom: 2px;
+            font-weight: 600;
+            font-size: .95em;
+            margin-bottom: 4px;
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
         }
 
-        .name-tag {
-            display: inline-block;
-            margin-left: 6px;
-            padding: 1px 7px;
-            border-radius: 20px;
-            background: #f0f1f5;
+        .pkg-name .appid-text,
+        .pkg-name .appid-sub {
+            font-family: 'SF Mono', Menlo, Consolas, 'Courier New', monospace;
+        }
+
+        .pkg-name .appid-text {
+            font-weight: 500;
+            font-size: .92em;
+        }
+
+        /* 有真名时, appid 以小号等宽字跟在名字后面 */
+        .pkg-name .appid-sub {
+            margin-left: 8px;
             color: var(--text-hint);
-            font-size: .76em;
             font-weight: 400;
-            vertical-align: middle;
+            font-size: .76em;
         }
 
         .pkg-meta {
             color: var(--text-hint);
-            font-size: .84em;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
+            font-size: .8em;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .pkg-meta .ver {
+            color: var(--text-secondary);
+            background: #f0f1f5;
+            padding: 1px 7px;
+            border-radius: 6px;
+            font-size: .9em;
+            font-weight: 500;
         }
 
         .pkg-side {
@@ -337,6 +358,39 @@
             padding: 7px 16px;
             font-size: .86em;
             border-radius: 8px;
+        }
+
+        /* 列表行的反编译按钮: 默认低调描边, 悬浮所在行时才点亮 ——
+           50 行 50 个实心蓝按钮太吵, 整页只有当前行有强色 */
+        .btn-decompile {
+            border: 1px solid var(--border);
+            background: #fff;
+            color: var(--accent);
+            padding: 6px 14px;
+            border-radius: 8px;
+            font-size: .84em;
+            font-weight: 600;
+            cursor: pointer;
+            font-family: inherit;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            transition: background .15s ease, color .15s ease, border-color .15s ease, box-shadow .15s ease;
+        }
+
+        .pkg-row:hover .btn-decompile:not(:disabled) {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: #fff;
+        }
+
+        .btn-decompile:hover:not(:disabled) {
+            box-shadow: 0 2px 8px rgba(79, 97, 235, .35);
+        }
+
+        .btn-decompile:disabled {
+            opacity: .5;
+            cursor: not-allowed;
         }
 
         .btn-ghost {
