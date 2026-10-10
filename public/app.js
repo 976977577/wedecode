@@ -43,6 +43,7 @@ class WedecodeApp {
         this.scanBody = document.getElementById('scanBody');
         this.scanCount = document.getElementById('scanCount');
         this.rescanBtn = document.getElementById('rescanBtn');
+        this.clearScanBtn = document.getElementById('clearScanBtn');
 
         // 日志弹窗
         this.logModal = document.getElementById('logModal');
@@ -70,6 +71,7 @@ class WedecodeApp {
     bindEvents() {
         this.scanEntryBtn?.addEventListener('click', () => this.handleScan());
         this.rescanBtn?.addEventListener('click', () => this.handleScan());
+        this.clearScanBtn?.addEventListener('click', () => this.handleClearScan());
 
         // 日志弹窗: 关闭 = 后台继续编译, 不终止
         this.closeLogBtn?.addEventListener('click', () => this.closeLogModal());
@@ -124,6 +126,7 @@ class WedecodeApp {
 
         this.scanEntryBtn.disabled = true;
         this.rescanBtn.disabled = true;
+        this.clearScanBtn.disabled = true;
         this.emptyState.classList.add('hidden'); // 首次扫描后空态永久退场
         this.scanSection.classList.remove('hidden');
         this.scanCount.textContent = '';
@@ -146,7 +149,21 @@ class WedecodeApp {
             this.isScanning = false;
             this.scanEntryBtn.disabled = false;
             this.rescanBtn.disabled = false;
+            this.clearScanBtn.disabled = false;
         }
+    }
+
+    /**
+     * 清空扫描列表: 仅清界面, 回到空态, 不动磁盘上的任何文件。
+     * 编译中不允许清空 —— 重绘列表会丢失角标与日志入口。
+     */
+    handleClearScan() {
+        if (this.isCompiling || this.isScanning) return;
+
+        this.packages = [];
+        this.rowRefs = [];
+        this.scanSection.classList.add('hidden');
+        this.emptyState.classList.remove('hidden');
     }
 
     renderScanError(message) {
@@ -303,6 +320,7 @@ class WedecodeApp {
     setCompileUI(compiling) {
         this.rowRefs.forEach(ref => { if (ref) ref.compileBtn.disabled = compiling; });
         this.rescanBtn.disabled = compiling; // 重扫会重绘列表、丢失角标, 编译中禁用
+        this.clearScanBtn.disabled = compiling; // 清空同理
     }
 
     setBadge(ref, status) {
