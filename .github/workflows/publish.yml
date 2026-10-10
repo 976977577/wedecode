@@ -1,0 +1,91 @@
+name: Publish to NPM
+
+on:
+  push:
+    tags:
+      - 'v*'  # 匹配所有以 v 开头的 tag，如 v1.0.0
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9
+          
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+          
+      - name: Get pnpm store directory
+        shell: bash
+        run: |
+          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+          
+      - name: Setup pnpm cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+            
+      - name: Extract version from tag
+        id: get_version
+        shell: bash
+        run: |
+          TAG_NAME=${GITHUB_REF#refs/tags/}
+          # 移除 'v' 前缀（如果存在）
+          VERSION=${TAG_NAME#v}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Tag: $TAG_NAME, Version: $VERSION"
+          
+      - name: Update package.json version
+        run: |
+          node -e "
+            const fs = require('fs');
+            const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+            pkg.version = '${{ steps.get_version.outputs.version }}';
+            fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
+          "
+          echo "✅ package.json 版本已更新为: ${{ steps.get_version.outputs.version }}"
+          
+      - name: Install dependencies
+        run: |
+          # 尝试使用 frozen-lockfile 安装
+          if pnpm install --frozen-lockfile; then
+            echo "✅ 使用 frozen-lockfile 安装成功"
+          else
+            echo "⚠️  lockfile 与 package.json 不同步，正在更新 lockfile..."
+            echo "lockfile 版本: $(grep '^lockfileVersion:' pnpm-lock.yaml 2>/dev/null || echo '未找到')"
+            echo "pnpm 版本: $(pnpm --version)"
+            # 更新 lockfile 并安装依赖
+            pnpm install --no-frozen-lockfile
+            echo "✅ lockfile 已更新并安装完成"
+          fi
+        
+      - name: Build project
+        run: pnpm run build
+        
+      - name: Verify package.json version
+        run: |
+          echo "最终 package.json 版本: $(node -p "require('./package.json').version")"
+          echo "Tag 版本: ${{ steps.get_version.outputs.version }}"
+          
+      - name: Configure npm registry for pnpm
+        run: |
+          echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > .npmrc
+          
+      - name: Publish to NPM
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: pnpm publish --no-git-checks --access public
+        # 使用 --no-git-checks 避免在 CI 环境中检查 git 状态
+

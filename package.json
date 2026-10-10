@@ -1,0 +1,108 @@
+{
+  "name": "wedecode",
+  "version": "0.0.0",
+  "type": "module",
+  "description": "微信小程序源代码还原工具, 线上代码安全审计",
+  "bin": {
+    "wedecode": "./dist/wedecode.js"
+  },
+  "scripts": {
+    "bootstrap": "pnpm install",
+    "start": "vite build && node dist/wedecode.js",
+    "dev": "vite build --watch",
+    "build": "vite build",
+    "ui": "vite build && node dist/wedecode.js ui",
+    "workspace:init": "vite build && node dist/workspace/workspace-cli.js init",
+    "workspace:start": "vite build && node dist/workspace/workspace-cli.js start",
+    "workspace:dev": "vite build && node dist/workspace/workspace-cli.js start -p 3000",
+    "test:cmd": "wedecode",
+    "test:cmd:dev": "DEV=true  wedecode",
+    "test:cmd:args": "DEV=true wedecode -o OUTPUT",
+    "link": "vite build && pnpm link --dir= ./",
+    "unlink": "pnpm unlink",
+    "release:npm": "vite build && npm publish",
+    "release:git": "vite build && git commit -am \"chore: release v$npm_package_version\" && git tag $npm_package_version && git push --tags ",
+    "dev:unpack:dir": "DEV=true wedecode --clear -o OUTPUT pkg/wx1736dcbd36f4c055",
+    "dev:unpack:subPack": "DEV=true wedecode --clear -o OUTPUT pkg/mt/_mobike_.wxapkg",
+    "dev:unpack:game-dir": "DEV=true wedecode --clear -o OUTPUT-GAME pkg/weixin-dushu",
+    "preview:unpack": "wedecode -ow true -o OUTPUT pkg/issues8-sxd",
+    "prepare": "husky",
+    "commitlint": "commitlint --edit",
+    "commitlint:last": "commitlint --from HEAD~1 --to HEAD --verbose"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/biggerstar/wedecode.git"
+  },
+  "license": "GPL-3.0-or-later",
+  "bugs": {
+    "url": "https://github.com/biggerstar/wedecode/issues"
+  },
+  "files": [
+    "dist",
+    "public",
+    "decryption-tool"
+  ],
+  "homepage": "https://github.com/biggerstar/wedecode#readme",
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org/"
+  },
+  "dependencies": {
+    "@biggerstar/deepmerge": "^1.0.3",
+    "@biggerstar/inquirer-selectable-table": "^1.0.12",
+    "axios": "^1.7.4",
+    "cheerio": "1.0.0-rc.12",
+    "commander": "^12.1.0",
+    "cors": "^2.8.5",
+    "cssbeautify": "^0.3.1",
+    "escodegen": "^1.14.3",
+    "esprima": "^4.0.1",
+    "express": "^5.1.0",
+    "figlet": "^1.7.0",
+    "glob": "^10.4.1",
+    "inquirer": "^9.2.23",
+    "js-beautify": "^1.15.1",
+    "jsdom": "^24.1.0",
+    "multer": "^2.0.2",
+    "open-file-explorer": "^1.0.2",
+    "picocolors": "^1.0.1",
+    "single-line-log": "^1.1.2",
+    "update-check": "^1.5.4",
+    "vm2": "^3.9.19",
+    "ws": "^8.18.3"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/cssbeautify": "^0.3.5",
+    "@types/escodegen": "^0.0.10",
+    "@types/esprima": "^4.0.6",
+    "@types/express": "^5.0.3",
+    "@types/figlet": "^1.5.8",
+    "@types/inquirer": "^9.0.7",
+    "@types/js-beautify": "^1.14.3",
+    "@types/jsdom": "^21.1.7",
+    "@types/multer": "^2.0.0",
+    "@types/node": "^20.14.2",
+    "@types/open-file-explorer": "^1.0.2",
+    "@types/single-line-log": "^1.1.2",
+    "@types/ws": "^8.18.1",
+    "@commitlint/cli": "^19.4.0",
+    "@commitlint/config-conventional": "^19.4.0",
+    "husky": "^9.0.11",
+    "lerna": "^8.1.7",
+    "rollup-plugin-copy": "^3.5.0",
+    "ttypescript": "^1.5.15",
+    "typescript-transform-paths": "^3.5.5",
+    "vite": "^5.2.13",
+    "vite-tsconfig-paths": "^5.1.4"
+  },
+  "keywords": [
+    "wxapkg",
+    "Decompilation",
+    "小程序",
+    "反编译",
+    "审计",
+    "安全",
+    "可视化操作"
+  ]
+}

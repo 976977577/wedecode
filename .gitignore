@@ -1,0 +1,31 @@
+﻿obj/
+gen/
+pkg/*
+.ant-targets-build.xml
+project.properties
+auto.prop
+.classpath
+.settings/
+*.iml
+dist
+.idea/
+local.properties
+build.xml
+6.1-main.iml
+.gradle/
+build/
+captures/
+node_modules
+wxapkg
+/pkg/
+test/js/
+OUTPUT
+OUTPUT-GAME
+.DS_Store
+workspaces/*
+
+# WorkBuddy 本地工作记忆与工具目录(不入库)
+.workbuddy/
+
+# husky 自动生成目录
+.husky/_
