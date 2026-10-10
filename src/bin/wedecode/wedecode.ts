@@ -4,14 +4,10 @@ import { Command } from 'commander';
 import pkg from '../../../package.json';
 import {clearScreen, printLog, sleep} from "@/utils/common";
 import {
-  createNewVersionUpdateNotice,
   createSlogan
 } from "@/bin/wedecode/common";
 import {startMainCommanderProcess} from "@/bin/wedecode/main-commander-process";
 import { WorkspaceServer } from "@/workspace/workspace-server";
-
-const notice = createNewVersionUpdateNotice()
-notice.query()
 
 const program = new Command();
 
@@ -32,7 +28,6 @@ program
     clearScreen()
     await sleep(100)
     printLog(createSlogan(), {isStart: true});
-    await notice.notice()
     /* ----------------------------------开始交互页面------------------------------------- */
     await startMainCommanderProcess(args, argMap)
     process.exit(0)

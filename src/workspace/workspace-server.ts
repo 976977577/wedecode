@@ -7,6 +7,7 @@ import { WebSocketServer } from 'ws';
 import { createServer } from 'node:http';
 import { spawn, ChildProcess } from 'node:child_process';
 import { fileURLToPath } from 'url';
+import openFileExplorer from 'open-file-explorer';
 import { scanPackagesForDisplay } from '@/bin/wedecode/scan';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -58,14 +59,23 @@ export class WorkspaceServer {
   private uploadsDir: string;
   private outputDir: string;
 
-  constructor(port: number = 3000) {
+  /**
+   * @param port 监听端口
+   * @param workspacesDir 工作区目录 (不传则退回当前工作目录下的 workspaces)
+   *
+   * 注意: 不能用 process.env.WORKSPACE_ROOT 传目录 —— vite 以 browser 平台打包时
+   * 会把 `process.env` 静态替换为「构建时的环境快照」, 运行时设置的环境变量不生效
+   * (实测产物里是 define_process_env_default; 绕写 globalThis['process'] 同样被
+   * 归一化替换掉)。因此工作区目录必须由调用方显式传入构造参数。
+   */
+  constructor(port: number = 3000, workspacesDir?: string) {
     this.app = express();
     this.server = createServer(this.app);
     this.wss = new WebSocketServer({ server: this.server });
 
     // 设置目录路径
-    this.workspacesDir = process.env.WORKSPACE_ROOT
-      ? path.join(process.env.WORKSPACE_ROOT, 'workspaces')
+    this.workspacesDir = workspacesDir
+      ? path.resolve(workspacesDir)
       : path.join(process.cwd(), 'workspaces');
     this.uploadsDir = path.join(this.workspacesDir, 'uploads');
     this.outputDir = path.join(this.workspacesDir, 'output');
@@ -157,6 +167,12 @@ export class WorkspaceServer {
 
     // 下载功能
     this.app.get('/api/workspaces/:id/download', this.downloadWorkspace.bind(this));
+
+    // 在系统文件管理器中打开产物目录 (桌面版/浏览器模式通用, 由服务端直接调用系统能力)
+    this.app.post('/api/workspaces/:id/open-output', this.openWorkspaceOutput.bind(this));
+
+    // 清除本次构建产物 (OUTPUT 目录)
+    this.app.delete('/api/workspaces/:id/output', this.clearWorkspaceOutput.bind(this));
 
     // 工作区应用信息更新
     this.app.put('/api/workspaces/:id/appinfo', this.updateWorkspaceAppInfo.bind(this));
@@ -1000,6 +1016,69 @@ export class WorkspaceServer {
     } catch (error) {
       console.error(`[下载错误] 下载异常: ${error}`);
       res.status(500).json({ error: `Failed to download workspace: ${error instanceof Error ? error.message : 'Unknown error'}` });
+    }
+  }
+
+  /**
+   * 在系统文件管理器中打开该工作区的产物目录 (workspace.path/OUTPUT)。
+   *
+   * 走服务端而不是 Electron IPC: 服务进程与桌面窗口同属主进程,
+   * 打开目录不需要渲染进程参与, 浏览器访问时同样可用。
+   */
+  private async openWorkspaceOutput(req: express.Request, res: express.Response): Promise<void> {
+    const { id } = req.params;
+    const workspace = this.workspaces.get(id);
+
+    if (!workspace) {
+      res.status(404).json({ error: 'Workspace not found' });
+      return;
+    }
+
+    const outputPath = path.join(workspace.path, 'OUTPUT');
+    if (!fs.existsSync(outputPath)) {
+      res.status(404).json({ error: '产物目录不存在, 请先完成反编译', path: outputPath });
+      return;
+    }
+
+    try {
+      openFileExplorer(outputPath, () => void 0);
+      res.json({ success: true, path: outputPath });
+    } catch (error) {
+      res.status(500).json({
+        error: '打开目录失败',
+        message: error instanceof Error ? error.message : String(error)
+      });
+    }
+  }
+
+  /**
+   * 清除本次构建产物: 删除 workspace.path/OUTPUT 整个目录。
+   * 只删产物, 不动工作区/上传文件, 便于重新编译。
+   */
+  private async clearWorkspaceOutput(req: express.Request, res: express.Response): Promise<void> {
+    const { id } = req.params;
+    const workspace = this.workspaces.get(id);
+
+    if (!workspace) {
+      res.status(404).json({ error: 'Workspace not found' });
+      return;
+    }
+
+    const outputPath = path.join(workspace.path, 'OUTPUT');
+    if (!fs.existsSync(outputPath)) {
+      res.json({ success: true, removed: false, message: '产物目录不存在, 无需清理', path: outputPath });
+      return;
+    }
+
+    try {
+      fs.rmSync(outputPath, { recursive: true, force: true });
+      res.json({ success: true, removed: true, path: outputPath });
+    } catch (error) {
+      console.error('清除产物失败:', error);
+      res.status(500).json({
+        error: '清除产物失败',
+        message: error instanceof Error ? error.message : String(error)
+      });
     }
   }
 

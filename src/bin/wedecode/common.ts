@@ -7,50 +7,10 @@ import {
 } from "@/bin/wedecode/enum";
 import prompts from "@/bin/wedecode/inquirer";
 import colors from "picocolors";
-import pkg from "../../../package.json";
-import checkForUpdate from "update-check";
 import figlet from "figlet";
 import process from "node:process";
 import axios from "axios";
 
-
-/**
- * 查询是否有新版本
- * */
-export function createNewVersionUpdateNotice(): {
-  query(): void
-  notice(): Promise<void>
-} {
-  let updateInfo: Record<any, any> | null
-  return {
-    /** 进行查询 */
-    query() {
-      checkForUpdate(pkg).then(res => updateInfo = res).catch(() => void 0)
-    },
-    /**
-     * 异步使用， 时间错开，因为查询需要时间， 如果查询到新版本， 则进行通知
-     * 基于 update-check 如果本次查到更新但是没通知， 下次启动将会从缓存中获取版本信息并通知
-     * */
-    async notice() {
-      await sleep(200)
-      if (updateInfo && updateInfo.latest) {
-        printLog(`
-    🎉  wedecode 有新版本:  v${pkg.version}  -->  v${updateInfo.latest}
-    🎄  您可以直接使用  ${colors.blue(`npm i -g wedecode@${updateInfo.latest}`)}  进行更新
-    💬  npm地址:  https://www.npmjs.com/package/wedecode  
-      \n`, {
-          isStart: true,
-        })
-      } else {
-        printLog(`
-              🎄  当前使用版本:  v${pkg.version}
-      \n`, {
-          isStart: true,
-        })
-      }
-    }
-  }
-}
 
 /**
  * 创建 slogan 大字横幅

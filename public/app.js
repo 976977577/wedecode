@@ -31,11 +31,6 @@ class WedecodeApp {
         this.initElements();
         this.bindEvents();
         this.connectWebSocket();
-
-        // 非桌面版 (浏览器访问) 没有 shell.openPath, 隐藏「打开产物目录」
-        if (!window.wedecodeDesktop?.openPath) {
-            this.openDirBtn?.classList.add('hidden');
-        }
     }
 
     initElements() {
@@ -59,6 +54,7 @@ class WedecodeApp {
         this.logFooter = document.getElementById('logFooter');
         this.openDirBtn = document.getElementById('openDirBtn');
         this.downloadZipBtn = document.getElementById('downloadZipBtn');
+        this.clearOutputBtn = document.getElementById('clearOutputBtn');
     }
 
     bindEvents() {
@@ -79,6 +75,7 @@ class WedecodeApp {
         this.copyLogBtn?.addEventListener('click', () => this.copyCurrentLog());
         this.openDirBtn?.addEventListener('click', () => this.openOutputDir());
         this.downloadZipBtn?.addEventListener('click', () => this.downloadZip());
+        this.clearOutputBtn?.addEventListener('click', () => this.clearOutput());
     }
 
     /* ==================== 扫描 ==================== */
@@ -340,6 +337,7 @@ class WedecodeApp {
      * 追加一条日志到 session 缓冲; 若弹窗正展示该 session 则同步渲染。
      */
     appendLog(session, text, type = 'info') {
+        if (!session) return;
         String(text).split('\n').forEach(raw => {
             const line = raw.trim();
             if (!line) return;
@@ -409,19 +407,53 @@ class WedecodeApp {
     /* ==================== 产物操作 ==================== */
 
     /**
-     * 打开产物目录 (仅桌面版)。产物固定输出在 workspace.path/OUTPUT。
+     * 打开产物目录。
+     *
+     * 产物固定输出在 workspace.path/OUTPUT; 由服务端调用系统文件管理器打开,
+     * 因此桌面版与浏览器访问都能用, 也不受工作区根目录所在位置影响。
      */
     async openOutputDir() {
-        if (!this.workspacePath) return;
-        const outputDir = this.workspacePath.replace(/\/+$/, '') + '/OUTPUT';
+        if (!this.workspaceId) return;
 
+        this.openDirBtn.disabled = true;
         try {
-            const result = await window.wedecodeDesktop.openPath(outputDir);
-            if (result && result.success === false) {
-                alert('打开目录失败: ' + (result.error || '未知错误'));
+            const res = await fetch(`/api/workspaces/${this.workspaceId}/open-output`, { method: 'POST' });
+            const data = await res.json();
+            if (!res.ok) {
+                this.appendLog(this.modalSession, `打开产物目录失败: ${data.error || '未知错误'}`, 'error');
+                alert('打开产物目录失败: ' + (data.error || '未知错误'));
             }
         } catch (err) {
-            alert('打开目录失败: ' + (err.message || err));
+            alert('打开产物目录失败: ' + (err.message || err));
+        } finally {
+            this.openDirBtn.disabled = false;
+        }
+    }
+
+    /**
+     * 清除本次构建产物 (删除 OUTPUT 目录), 便于重新编译。
+     */
+    async clearOutput() {
+        if (!this.workspaceId) return;
+        if (!window.confirm('确定清除本次反编译的产物吗?\n产物目录将被删除, 可重新反编译生成。')) return;
+
+        this.clearOutputBtn.disabled = true;
+        try {
+            const res = await fetch(`/api/workspaces/${this.workspaceId}/output`, { method: 'DELETE' });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || '清除失败');
+
+            const msg = data.removed ? '已清除本次构建产物' : (data.message || '产物目录不存在, 无需清理');
+            if (this.modalSession) {
+                this.appendLog(this.modalSession, msg, data.removed ? 'success' : 'info');
+            }
+            this.flashButton(this.clearOutputBtn, '<i class="fas fa-check"></i> 已清除');
+        } catch (err) {
+            const msg = err.message || String(err);
+            if (this.modalSession) this.appendLog(this.modalSession, '清除产物失败: ' + msg, 'error');
+            alert('清除产物失败: ' + msg);
+        } finally {
+            this.clearOutputBtn.disabled = false;
         }
     }
 

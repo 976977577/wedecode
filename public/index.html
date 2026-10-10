@@ -369,6 +369,16 @@
             cursor: not-allowed;
         }
 
+        .btn-danger {
+            color: var(--danger);
+            border-color: #f5d3d5;
+        }
+
+        .btn-danger:hover:not(:disabled) {
+            background: #fdecec;
+            color: var(--danger);
+        }
+
         .app-footer {
             margin-top: 28px;
             color: var(--text-hint);
@@ -566,6 +576,9 @@
                 </button>
                 <button type="button" class="btn-ghost" id="downloadZipBtn">
                     <i class="fas fa-download"></i> 下载 zip
+                </button>
+                <button type="button" class="btn-ghost btn-danger" id="clearOutputBtn">
+                    <i class="fas fa-trash"></i> 清除本次产物
                 </button>
             </div>
         </div>

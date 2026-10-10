@@ -58,9 +58,14 @@ function waitForServer (port, timeout = 15000) {
  * 启动内置的 WorkspaceServer (复用 src/workspace/workspace-server.ts)
  */
 async function startWorkspaceServer () {
-  // WorkspaceServer 从 process.env.WORKSPACE_ROOT 读取工作区根目录
-  process.env.WORKSPACE_ROOT = path.join(app.getPath('userData'), 'workspaces')
-  fs.mkdirSync(process.env.WORKSPACE_ROOT, { recursive: true })
+  // 工作区根目录: 显式传给 WorkspaceServer。
+  // 不能只依赖 process.env.WORKSPACE_ROOT —— vite 以 browser 平台打包时会把
+  // `process.env` 静态替换为构建时快照, 运行时设置的环境变量不会生效
+  // (实测产物里变成 define_process_env_default, 服务端只能回退到 cwd/workspaces,
+  // 导致工作区被写到应用启动目录, 打包后甚至可能写到 app 包内或根目录)。
+  const userDataDir = app.getPath('userData')
+  const workspacesDir = path.join(userDataDir, 'workspaces')
+  fs.mkdirSync(workspacesDir, { recursive: true })
 
   // 打包产物在 resources/app/dist 下, 开发态在项目根的 dist 下
   const candidates = [
@@ -90,7 +95,7 @@ async function startWorkspaceServer () {
   for (let port = 3000; port < 3050; port++) {
     if (!(await isPortFree(port))) continue
     try {
-      const instance = new WorkspaceServer(port)
+      const instance = new WorkspaceServer(port, workspacesDir)
       await waitForServer(port)
       workspaceServer = instance
       serverPort = port
@@ -129,30 +134,6 @@ function findByShape (mod) {
       MARKERS.every(m => typeof value.prototype?.[m] === 'function')
   )
 }
-
-/**
- * 渲染进程请求在系统文件管理器中打开目录。
- *
- * 安全校验: 只允许打开工作区根目录 (WORKSPACE_ROOT) 之内的路径,
- * 防止网页侧被注入后借 IPC 打开任意系统目录。
- */
-ipcMain.handle('open-path', async (event, targetPath) => {
-  if (typeof targetPath !== 'string' || !targetPath) {
-    return { success: false, error: '非法路径' }
-  }
-  const workspacesRoot = path.resolve(process.env.WORKSPACE_ROOT || '')
-  const resolved = path.resolve(targetPath)
-  if (!workspacesRoot || !resolved.startsWith(workspacesRoot + path.sep)) {
-    return { success: false, error: '路径不在工作区目录内' }
-  }
-  if (!fs.existsSync(resolved)) {
-    return { success: false, error: '目录不存在 (反编译可能尚未产出)' }
-  }
-  const errorMessage = await shell.openPath(resolved)
-  return errorMessage
-    ? { success: false, error: errorMessage }
-    : { success: true }
-})
 
 function createWindow (port) {
   const saved = store.get('windowBounds') || { width: 1280, height: 900 }

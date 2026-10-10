@@ -21,9 +21,6 @@ program
     const port = parseInt(options.port);
     const workspaceDir = path.resolve(options.workspaceDir);
 
-    // 设置环境变量
-    process.env.WORKSPACE_ROOT = workspaceDir;
-    
     console.log('🚀 启动 Wedecode 工作区服务器...');
     console.log(`📁 工作区目录: ${workspaceDir}`);
     console.log(`🌐 端口: ${port}`);
@@ -33,8 +30,8 @@ program
       fs.mkdirSync(workspaceDir, { recursive: true });
     }
     
-    // 启动服务器
-    new WorkspaceServer(port);
+    // 启动服务器: 工作区目录显式传入 (环境变量在打包产物里不生效)
+    new WorkspaceServer(port, workspaceDir);
   });
 
 // 如果直接运行此文件，则解析命令行参数

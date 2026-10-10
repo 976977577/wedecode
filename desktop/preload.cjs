@@ -18,12 +18,6 @@ contextBridge.exposeInMainWorld('wedecodeDesktop', {
   openWorkspacesDir: () => ipcRenderer.send('open-workspaces-dir'),
 
   /**
-   * 在系统文件管理器中打开指定目录 (仅限工作区目录内, 主进程侧校验)。
-   * 返回 Promise<{ success: boolean, error?: string }>。
-   */
-  openPath: (targetPath) => ipcRenderer.invoke('open-path', targetPath),
-
-  /**
    * 主进程主动通知(预留)
    */
   onOpenWorkspacesDir: (handler) => {
