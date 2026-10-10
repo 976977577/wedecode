@@ -67,12 +67,14 @@
             margin-bottom: 24px;
         }
 
-        /* 设置入口固定在窗口右上角, 不随内容列移动 */
+        /* 设置入口固定在窗口右上角, 不随内容列移动。
+           顶部 38px 是可拖拽区(.drag-strip, z-index 9999), 按钮必须盖在它
+           之上并声明 no-drag, 否则点击会被拖拽层吞掉(表现为时灵时不灵) */
         .settings-btn {
             position: fixed;
             top: 16px;
             right: 16px;
-            z-index: 600;
+            z-index: 10000;
             width: 34px;
             height: 34px;
             border: 1px solid var(--border);
@@ -605,12 +607,8 @@
             box-shadow: 0 0 0 3px rgba(79, 97, 235, .12);
         }
 
-        /* 桌面版: 输入框只读, 点击即弹出系统目录选择框 */
-        .settings-input.readonly {
-            cursor: pointer;
-        }
-
-        .settings-input.readonly:focus {
+        /* 只读时的输入框不需要焦点高亮 */
+        .settings-input:read-only:focus {
             box-shadow: none;
         }
 
@@ -716,22 +714,18 @@
                 <div class="settings-field">
                     <label class="settings-label" for="settingsOutputInput">反编译输出目录</label>
                     <div class="settings-row">
-                        <input type="text" id="settingsOutputInput" class="settings-input"
-                               placeholder="留空使用默认位置" spellcheck="false" autocomplete="off">
-                        <button type="button" class="btn-primary hidden" id="settingsBrowseBtn">
-                            <i class="fas fa-folder-open"></i> 选择目录…
-                        </button>
+                        <input type="text" id="settingsOutputInput" class="settings-input" readonly
+                               placeholder="请点击右侧按钮选择目录" spellcheck="false" autocomplete="off">
+                        <button type="button" class="btn-primary hidden" id="settingsBrowseBtn">选择目录…</button>
                     </div>
                     <div class="settings-hint" id="settingsHint">
-                        反编译出的源码会写入该目录。留空时输出到应用默认的工作区目录。
+                        点击「选择目录…」指定反编译输出位置，源码会直接写入该目录。清空后保存可恢复默认位置。
                     </div>
                 </div>
             </div>
             <div class="modal-foot" id="settingsFooter">
                 <button type="button" class="btn-ghost" id="settingsCancelBtn">取消</button>
-                <button type="button" class="btn-primary" id="settingsSaveBtn">
-                    <i class="fas fa-check"></i> 保存
-                </button>
+                <button type="button" class="btn-primary" id="settingsSaveBtn">保存</button>
             </div>
         </div>
     </div>

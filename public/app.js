@@ -102,15 +102,13 @@ class WedecodeApp {
             }
         });
 
-        // 目录选择: 桌面版以「点选」为主 —— 输入框只读, 点输入框或点按钮都弹
-        // 系统目录选择框; 浏览器没有该能力, 隐藏按钮, 保留手动输入
+        // 输出目录只能通过按钮点选: 输入框恒为只读(HTML 已设 readonly)。
+        // 桌面版弹出系统目录选择框; 浏览器没有该能力, 才放开只读允许手输
         if (window.wedecodeDesktop?.chooseDirectory) {
-            this.settingsOutputInput.readOnly = true;
-            this.settingsOutputInput.classList.add('readonly');
-            this.settingsOutputInput.placeholder = '点击此处或下方按钮选择目录';
-            this.settingsOutputInput?.addEventListener('click', () => this.browseOutputDir());
             this.settingsBrowseBtn?.classList.remove('hidden');
         } else {
+            this.settingsOutputInput.readOnly = false;
+            this.settingsOutputInput.placeholder = '留空使用默认位置';
             this.settingsBrowseBtn?.classList.add('hidden');
         }
     }
