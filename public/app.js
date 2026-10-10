@@ -262,7 +262,8 @@ class WedecodeApp {
             const res = await fetch(`/api/workspaces/${workspace.id}/compile-folder`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ folderPath: pkg.storagePath, options: [] })
+                // appId 用于自定义输出目录下按小程序分包存放源码
+                body: JSON.stringify({ folderPath: pkg.storagePath, appId: pkg.appId, options: [] })
             });
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || '启动失败');

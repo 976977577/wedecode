@@ -23,6 +23,8 @@ export interface Workspace {
   updatedAt: Date;
   path: string;
   unpackOnly?: boolean;
+  /** 最近一次反编译的小程序 appid (自定义输出目录下据此建立子目录) */
+  lastAppId?: string;
   appInfo?: {
     appid?: string;
     nickname?: string;
@@ -333,9 +335,25 @@ export class WorkspaceServer {
    * 单工作区模型一致); 否则用工作区内的 OUTPUT 目录。
    */
   private getOutputPath(workspace: Workspace): string {
-    return this.settings.outputDir
-      ? path.resolve(this.settings.outputDir)
-      : path.join(workspace.path, 'OUTPUT');
+    if (!this.settings.outputDir) {
+      return path.join(workspace.path, 'OUTPUT');
+    }
+    // 自定义输出目录下按 appid 建子目录, 否则多个小程序的源码会平铺混在一起。
+    // 「打开产物目录 / 下载 zip / 清除产物」都复用这里, 因此依赖编译时记录的
+    // lastAppId —— 与「同一时刻只允许编译一个」的串行模型一致
+    return workspace.lastAppId
+      ? path.join(path.resolve(this.settings.outputDir), workspace.lastAppId)
+      : path.resolve(this.settings.outputDir);
+  }
+
+  /**
+   * 校验并取用 appid (要做目录名, 必须排除路径穿越)。
+   * 非法或缺失时返回 undefined —— 上层随即退回「不打子目录」。
+   */
+  private normalizeAppId(value: unknown): string | undefined {
+    if (typeof value !== 'string') return undefined;
+    const trimmed = value.trim();
+    return /^[A-Za-z0-9_-]{4,64}$/.test(trimmed) ? trimmed : undefined;
   }
 
   private handleUploadError(error: any, req: express.Request, res: express.Response, next: express.NextFunction): void {
@@ -1194,7 +1212,7 @@ export class WorkspaceServer {
       }
 
       // 从请求体中获取编译参数
-      const { folderPath, options = [] } = req.body;
+      const { folderPath, appId, options = [] } = req.body;
 
       if (!folderPath) {
         res.status(400).json({ error: 'Folder path is required' });
@@ -1224,6 +1242,10 @@ export class WorkspaceServer {
       // 检测是否为解包模式
       const isUnpackOnly = parsedOptions.includes('--unpack-only');
       workspace.unpackOnly = isUnpackOnly;
+
+      // 记录本次编译的小程序标识 —— 自定义输出目录下按它建立子目录,
+      // 后续「打开产物目录 / 下载 zip / 清除产物」才能定位到同一个位置
+      workspace.lastAppId = this.normalizeAppId(appId);
       this.saveWorkspaces();
 
       // 创建执行会话
