@@ -29,3 +29,6 @@ workspaces/*
 
 # husky 自动生成目录
 .husky/_
+
+# 桌面版构建产物
+desktop/release/

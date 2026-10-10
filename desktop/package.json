@@ -1,0 +1,65 @@
+{
+  "name": "wedecode-desktop",
+  "productName": "Wedecode",
+  "version": "0.1.0",
+  "description": "微信小程序 wxapkg 反编译工具 —— 桌面版",
+  "private": true,
+  "main": "main.js",
+  "author": "Fanpeng <976977577@qq.com>",
+  "license": "GPL-3.0-or-later",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "build:app": "electron-builder --dir",
+    "build:dmg": "electron-builder --mac dmg"
+  },
+  "devDependencies": {
+    "electron": "44.7.0",
+    "electron-builder": "^26.15.3"
+  },
+  "build": {
+    "appId": "com.wedecode.desktop",
+    "productName": "Wedecode",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.js",
+      "preload.cjs",
+      "!**/*.map"
+    ],
+    "extraResources": [
+      {
+        "from": "../dist",
+        "to": "app/dist"
+      },
+      {
+        "from": "../public",
+        "to": "app/public"
+      }
+    ],
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "target": [
+        {
+          "target": "dir",
+          "arch": [
+            "arm64"
+          ]
+        },
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64"
+          ]
+        }
+      ],
+      "darkModeSupport": true,
+      "identity": null
+    },
+    "dmg": {
+      "title": "Wedecode 桌面版"
+    }
+  }
+}

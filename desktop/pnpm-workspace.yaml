@@ -1,0 +1,11 @@
+# pnpm 工作区配置
+# pnpm 12 起构建脚本白名单从 package.json 的 pnpm 字段迁移到此文件(allowBuilds)
+allowBuilds:
+  # vite 的底层打包器, 需执行安装脚本下载平台二进制, 否则 build 失败
+  esbuild: true
+  # 仅 lerna 的传递依赖, 本项目未直接使用, 不放行
+  nx: false
+  # electron-builder 的 Windows 打包工具链, 本项目只出 macOS 包(dmg/dir), 不需要
+  electron-winstaller: false
+  app-builder-bin: true
+  macos-sign: true

@@ -1,0 +1,214 @@
+/**
+ * Wedecode 桌面版 —— Electron 主进程
+ *
+ * 设计要点:
+ * 1. 不修改 src/ 任何文件, 直接复用现有 WorkspaceServer (express + ws)
+ * 2. 自动挑选空闲端口, 避免与用户已开的服务冲突
+ * 3. 关闭窗口即停止服务, 不留后台残留进程
+ * 4. 工作区数据放在 Electron userData 下, 不污染项目目录
+ */
+
+const { app, BrowserWindow, shell, dialog, Menu, ipcMain } = require('electron')
+const path = require('node:path')
+const fs = require('node:fs')
+const net = require('node:net')
+const http = require('node:http')
+
+// electron-builder 打包后:
+//   __dirname         = Contents/Resources/app.asar (仅含 main.js / preload.cjs)
+//   process.resourcesPath = Contents/Resources  →  extraResources 把 dist 与 public 放在 resources/app/ 下
+// 开发态下 dist 与 public 在项目根目录, 故回溯 __dirname 的上级
+const isPackaged = app.isPackaged
+const appRoot = isPackaged ? path.join(process.resourcesPath, 'app') : path.join(__dirname, '..')
+
+let mainWindow = null
+let workspaceServer = null
+let serverPort = null
+
+/**
+ * 找一个空闲端口。避免固定 3000 端口在用户已启动 CLI 服务时冲突。
+ */
+function findFreePort (preferred = 3000) {
+  return new Promise((resolve, reject) => {
+    const tryPort = (port, attempt = 0) => {
+      if (attempt > 20) return reject(new Error('无法找到可用端口'))
+
+      const server = net.createServer()
+      server.unref()
+      server.on('error', () => {
+        //端口被占用, 往下顺延
+        tryPort(preferred + attempt + 1, attempt + 1)
+      })
+      server.listen({ port, host: '127.0.0.1' }, () => {
+        server.close(() => resolve(port))
+      })
+    }
+    tryPort(preferred)
+  })
+}
+
+/**
+ * 等待 HTTP 服务就绪, 避免窗口打开时白屏。
+ */
+function waitForServer (port, timeout = 15000) {
+  return new Promise((resolve, reject) => {
+    const start = Date.now()
+    const probe = () => {
+      http
+        .get({ host: '127.0.0.1', port, path: '/api/health', timeout: 1000 }, res => {
+          res.resume()
+          if (res.statusCode && res.statusCode < 500) return resolve()
+          retry()
+        })
+        .on('error', retry)
+        .on('timeout', function () {
+          this.destroy()
+          retry()
+        })
+    }
+    const retry = () => {
+      if (Date.now() - start > timeout) {
+        return reject(new Error('本地服务启动超时'))
+      }
+      setTimeout(probe, 250)
+    }
+    probe()
+  })
+}
+
+/**
+ * 启动内置的 WorkspaceServer (复用 src/workspace/workspace-server.ts)
+ */
+async function startWorkspaceServer () {
+  serverPort = await findFreePort(3000)
+
+  // WorkspaceServer 从 process.env.WORKSPACE_ROOT 读取工作区根目录
+  process.env.WORKSPACE_ROOT = path.join(app.getPath('userData'), 'workspaces')
+  fs.mkdirSync(process.env.WORKSPACE_ROOT, { recursive: true })
+
+  // 打包产物在 resources/app/dist 下, 开发态在项目根的 dist 下
+  const candidates = [
+    path.join(appRoot, 'dist/workspace/workspace-server.js'),
+    path.join(appRoot, 'dist/workspace/workspace-server.cjs'),
+    path.join(__dirname, '../dist/workspace/workspace-server.js'),
+  ]
+  const serverEntry = candidates.find(p => fs.existsSync(p))
+  if (!serverEntry) {
+    throw new Error(`未找到编译产物, 请先执行 pnpm build\n已查找:\n${candidates.join('\n')}`)
+  }
+
+  const { WorkspaceServer } = await import(`file://${serverEntry}`)
+  workspaceServer = new WorkspaceServer(serverPort)
+
+  await waitForServer(serverPort)
+  return serverPort
+}
+
+function createWindow (port) {
+  mainWindow = new BrowserWindow({
+    width: 1280,
+    height: 900,
+    minWidth: 960,
+    minHeight: 640,
+    title: 'Wedecode',
+    backgroundColor: '#667eea',
+    show: false,
+    // macOS 隐藏标题栏红绿灯, 保留窗口控制(用titleBarStyle 而不是 frame:false)
+    titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.cjs'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: false // 需要 require 以加载 dist 产物
+    }
+  })
+
+  mainWindow.loadURL(`http://127.0.0.1:${port}/`)
+
+  mainWindow.once('ready-to-show', () => {
+    mainWindow.show()
+  })
+
+  // 外部链接走系统浏览器, 不在应用内开新窗口
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    shell.openExternal(url)
+    return { action: 'deny' }
+  })
+
+  mainWindow.on('closed', () => {
+    mainWindow = null
+  })
+}
+
+function buildMenu () {
+  const isMac = process.platform === 'darwin'
+  const template = [
+    ...(isMac ? [{ role: 'appMenu' }] : []),
+    {
+      label: '文件',
+      submenu: [
+        {
+          label: '打开工作区目录',
+          accelerator: 'CmdOrCtrl+Shift+O',
+          click: () => {
+            if (!mainWindow) return
+            mainWindow.webContents.send('open-workspaces-dir')
+          }
+        },
+        { type: 'separator' },
+        isMac ? { role: 'close', label: '关闭窗口' } : { role: 'quit', label: '退出' }
+      ]
+    },
+    { role: 'editMenu', label: '编辑' },
+    {
+      label: '视图',
+      submenu: [
+        { role: 'reload', label: '重新加载' },
+        { role: 'toggleDevTools', label: '开发者工具' },
+        { type: 'separator' },
+        { role: 'resetZoom', label: '实际大小' },
+        { role: 'zoomIn', label: '放大' },
+        { role: 'zoomOut', label: '缩小' },
+        { type: 'separator' },
+        { role: 'togglefullscreen', label: '全屏' }
+      ]
+    },
+    { role: 'windowMenu', label: '窗口' }
+  ]
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template))
+}
+
+// 单实例: 再次启动时聚焦已有窗口
+if (!app.requestSingleInstanceLock()) {
+  app.quit()
+} else {
+  app.on('second-instance', () => {
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore()
+      mainWindow.focus()
+    }
+  })
+
+  app.whenReady().then(async () => {
+    try {
+      const port = await startWorkspaceServer()
+      buildMenu()
+      createWindow(port)
+      console.log(`Wedecode 桌面版已启动: http://127.0.0.1:${port}`)
+    } catch (err) {
+      dialog.showErrorBox('启动失败', String(err && err.message ? err.message : err))
+      app.quit()
+    }
+  })
+
+  app.on('window-all-closed', () => {
+    // 关闭所有窗口即退出(桌面应用不应常驻后台)
+    app.quit()
+  })
+
+  app.on('activate', () => {
+    if (BrowserWindow.getAllWindows().length === 0 && serverPort) {
+      createWindow(serverPort)
+    }
+  })
+}
