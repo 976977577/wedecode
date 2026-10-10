@@ -32,3 +32,6 @@ workspaces/*
 
 # 桌面版构建产物
 desktop/release/
+
+# 运行时工作区数据(含本机绝对路径, 不应入库; desktop/ 下也需忽略)
+desktop/workspaces/
