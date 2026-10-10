@@ -65,14 +65,14 @@
         .app-header {
             text-align: center;
             margin-bottom: 24px;
-            position: relative;
         }
 
+        /* 设置入口固定在窗口右上角, 不随内容列移动 */
         .settings-btn {
-            position: absolute;
-            right: 0;
-            top: 50%;
-            transform: translateY(-50%);
+            position: fixed;
+            top: 16px;
+            right: 16px;
+            z-index: 600;
             width: 34px;
             height: 34px;
             border: 1px solid var(--border);
@@ -85,6 +85,7 @@
             align-items: center;
             justify-content: center;
             transition: background .15s ease, color .15s ease;
+            -webkit-app-region: no-drag;
         }
 
         .settings-btn:hover {
@@ -604,6 +605,15 @@
             box-shadow: 0 0 0 3px rgba(79, 97, 235, .12);
         }
 
+        /* 桌面版: 输入框只读, 点击即弹出系统目录选择框 */
+        .settings-input.readonly {
+            cursor: pointer;
+        }
+
+        .settings-input.readonly:focus {
+            box-shadow: none;
+        }
+
         .settings-hint {
             margin-top: 9px;
             color: var(--text-hint);
@@ -708,8 +718,8 @@
                     <div class="settings-row">
                         <input type="text" id="settingsOutputInput" class="settings-input"
                                placeholder="留空使用默认位置" spellcheck="false" autocomplete="off">
-                        <button type="button" class="btn-ghost hidden" id="settingsBrowseBtn">
-                            <i class="fas fa-folder-open"></i> 选择…
+                        <button type="button" class="btn-primary hidden" id="settingsBrowseBtn">
+                            <i class="fas fa-folder-open"></i> 选择目录…
                         </button>
                     </div>
                     <div class="settings-hint" id="settingsHint">

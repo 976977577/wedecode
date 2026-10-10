@@ -102,8 +102,15 @@ class WedecodeApp {
             }
         });
 
-        // 目录选择框是桌面版专属能力, 浏览器访问时隐藏
-        if (!window.wedecodeDesktop?.chooseDirectory) {
+        // 目录选择: 桌面版以「点选」为主 —— 输入框只读, 点输入框或点按钮都弹
+        // 系统目录选择框; 浏览器没有该能力, 隐藏按钮, 保留手动输入
+        if (window.wedecodeDesktop?.chooseDirectory) {
+            this.settingsOutputInput.readOnly = true;
+            this.settingsOutputInput.classList.add('readonly');
+            this.settingsOutputInput.placeholder = '点击此处或下方按钮选择目录';
+            this.settingsOutputInput?.addEventListener('click', () => this.browseOutputDir());
+            this.settingsBrowseBtn?.classList.remove('hidden');
+        } else {
             this.settingsBrowseBtn?.classList.add('hidden');
         }
     }
