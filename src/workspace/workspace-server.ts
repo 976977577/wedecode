@@ -9,7 +9,6 @@ import { spawn, ChildProcess } from 'node:child_process';
 import { fileURLToPath } from 'url';
 import openFileExplorer from 'open-file-explorer';
 import { scanPackagesForDisplay } from '@/bin/wedecode/scan';
-import { getAppletIconPath } from '@/utils/wxapp-icon';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -185,8 +184,6 @@ export class WorkspaceServer {
 
     // 扫描本机小程序包(纯查询, 无副作用)
     this.app.get('/api/scan', this.scanPackages.bind(this));
-    // 小程序图标: 直接读微信本地缓存, 不经过网络
-    this.app.get('/api/applet-icon', this.getAppletIcon.bind(this));
 
     // 提供前端页面
     this.app.get('/', (req, res) => {
@@ -435,15 +432,13 @@ export class WorkspaceServer {
         }
       }
 
-      const { packages, scannedPathList, nameLookupFailed, iconStats } = await scanPackagesForDisplay(manualPath);
+      const { packages, scannedPathList, nameLookupFailed } = await scanPackagesForDisplay(manualPath);
 
       res.json({
         success: true,
         count: packages.length,
         packages,
         scannedPathList,
-        // 本地图标索引情况, 便于排查「为什么列表没有图标」
-        iconStats,
         // 昵称依赖第三方接口(kainy.cn), 该接口目前被 Cloudflare 拦截。
         // 明确告知调用方, 避免用户困惑于「为什么只有 appid」
         nameLookupFailed: Boolean(nameLookupFailed),
@@ -459,37 +454,6 @@ export class WorkspaceServer {
         message: error instanceof Error ? error.message : String(error)
       });
     }
-  }
-
-  /**
-   * 返回微信本地缓存中的小程序图标。
-   *
-   * GET /api/applet-icon?appid=wxxxxxxxxxxxxxxxxx
-   *
-   * 图标来自微信自己的图标缓存目录(位于小程序 packages 目录的同级),
-   * 文件形如 <appid>_<hash>.png。纯本地读取, 离线可用、无网络依赖。
-   * 未命中时返回 404, 前端据此回退到文字占位图标。
-   * */
-  private async getAppletIcon(req: express.Request, res: express.Response): Promise<void> {
-    const appid = String(req.query.appid || '').trim();
-
-    // 严格校验格式, 避免任何形式的路径穿越
-    if (!/^wx[0-9a-z]{16}$/i.test(appid)) {
-      res.status(400).json({ error: '非法 appid' });
-      return;
-    }
-
-    const iconPath = getAppletIconPath(appid);
-    if (!iconPath) {
-      res.status(404).json({ error: '本地缓存中无该小程序图标' });
-      return;
-    }
-
-    // 索引只从微信缓存目录建立, 且路径由索引精确匹配得出, 不含用户输入
-    res.sendFile(iconPath, {
-      headers: { 'Cache-Control': 'public, max-age=86400' },
-      dotfiles: 'deny'
-    });
   }
 
   private async getFileTree(req: express.Request, res: express.Response): Promise<void> {

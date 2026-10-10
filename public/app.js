@@ -158,18 +158,9 @@ class WedecodeApp {
         const items = packages.map((pkg, index) => {
             const name = pkg.appName || pkg.appId;
             const iconText = pkg.nameResolved ? String(name).slice(0, 1) : 'wx';
-
-            // 图标来自微信本地缓存, 无需联网。默认显示文字占位,
-            // 只有图片真正加载成功才显示出来并隐藏文字 —— 加载失败自动回退。
-            const iconInner = pkg.hasIcon
-                ? `<span class="icon-fallback">${this.escapeHtml(iconText)}</span>`
-                  + `<img class="icon-img" src="/api/applet-icon?appid=${encodeURIComponent(pkg.appId)}" alt="" loading="lazy" style="display:none" `
-                  + `onload="this.style.display='block';this.previousElementSibling.style.display='none'">`
-                : this.escapeHtml(iconText);
-
             return `
             <li class="pkg-row">
-                <div class="pkg-icon">${iconInner}</div>
+                <div class="pkg-icon">${this.escapeHtml(iconText)}</div>
                 <div class="pkg-main">
                     <div class="pkg-name">
                         ${this.escapeHtml(name)}
