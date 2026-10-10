@@ -151,12 +151,13 @@ class WedecodeApp {
             const iconText = String(pkg.appId).replace(/^wx/i, '').slice(0, 2).toUpperCase() || 'WX';
 
             // 图标来自微信本地缓存(纯本地, 不联网)。默认只显示中性色块+文字,
-            // 图片真正加载成功(onload)后才显示并盖住文字; 加载失败/缓存里没有
-            // 则保持色块, 不会出现破图。统一灰调, 避免和真图标混排时花花绿绿。
+            // 图片真正加载成功(onload)后才显示并盖住文字, 同时给容器加 has-img
+            // 去掉占位背景 —— logo 自带圆角底色, 外面再垫灰底会像双层。
+            // 加载失败/缓存里没有则保持色块, 不会出现破图。
             const iconInner = pkg.hasIcon
                 ? `<span class="icon-fallback">${this.escapeHtml(iconText)}</span>`
                   + `<img class="icon-img" src="/api/applet-icon?appid=${encodeURIComponent(pkg.appId)}" alt="" `
-                  + `style="display:none" onload="this.style.display='block';this.previousElementSibling.style.display='none'">`
+                  + `style="display:none" onload="this.style.display='block';this.parentElement.classList.add('has-img');this.previousElementSibling.style.display='none'">`
                 : this.escapeHtml(iconText);
 
             // 第二行只放有信息量的内容: 版本号 + 时间(去秒)。
