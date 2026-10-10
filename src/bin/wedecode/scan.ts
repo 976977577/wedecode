@@ -7,6 +7,7 @@ import colors from "picocolors";
 import prompts from "@/bin/wedecode/inquirer";
 import { AppMainPackageNames, globPathList, YesOrNoEnum } from "@/bin/wedecode/enum";
 import { findWxAppIdForPath, findWxAppIdPath, getPathSplitList, stopCommander } from "@/bin/wedecode/common";
+import { getAppletIconPath, getAppletIconStats, refreshAppletIconIndex } from "@/utils/wxapp-icon";
 import fs from "node:fs";
 import os from "node:os";
 
@@ -107,15 +108,23 @@ export async function scanPackagesForDisplay(manualScanPath: string = ''): Promi
     updateDate: string
     description: string
     nameResolved: boolean
+    /** 本地微信缓存中是否存在该小程序的图标 */
+    hasIcon: boolean
   }>
   scannedPathList: string[]
   nameLookupFailed: boolean
+  /** 本地图标索引的诊断信息 */
+  iconStats: { indexed: number; dirs: string[] }
 }> {
   const scanPathList: string[] = manualScanPath.trim()
     ? [path.resolve(manualScanPath)]
     : globPathList
 
   const list = scanPackagesPure(manualScanPath)
+
+  // 建立本地图标索引(纯本地, 不依赖网络)。必须放在扫描之后,
+  // 因为图标目录是从实际扫到的包路径向上推导出来的。
+  refreshAppletIconIndex(list.map(item => item.storagePath))
 
   // 昵称只能由远程接口提供(kainy.cn), 本地包内不含该信息。
   // 一次可能扫到几十个包, 故限制并发, 避免串行叠加 10s 超时。
@@ -143,7 +152,8 @@ export async function scanPackagesForDisplay(manualScanPath: string = ''): Promi
           appName: item.appId,
           updateDate,
           description: item.storagePath,
-          nameResolved: false
+          nameResolved: false,
+          hasIcon: Boolean(getAppletIconPath(item.appId))
         }
         continue
       }
@@ -165,7 +175,8 @@ export async function scanPackagesForDisplay(manualScanPath: string = ''): Promi
         appName: nickname || item.appId,
         updateDate,
         description,
-        nameResolved: Boolean(nickname)
+        nameResolved: Boolean(nickname),
+        hasIcon: Boolean(getAppletIconPath(item.appId))
       }
     }
   }
@@ -179,7 +190,8 @@ export async function scanPackagesForDisplay(manualScanPath: string = ''): Promi
     packages: results,
     scannedPathList: scanPathList,
     // 有 appid 却一个昵称都没拿到 → 基本可判定远程接口不可用
-    nameLookupFailed: appidCount > 0 && resolvedCount === 0
+    nameLookupFailed: appidCount > 0 && resolvedCount === 0,
+    iconStats: getAppletIconStats()
   }
 }
 
