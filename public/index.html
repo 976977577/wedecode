@@ -619,6 +619,14 @@
             line-height: 1.6;
         }
 
+        /* 「…」是全角字符(占一个汉字宽), 按钮自然宽度会把它裁掉;
+           flex:none + nowrap 让按钮按含省略号的真实内容自适应 */
+        .settings-row .btn-primary {
+            flex: none;
+            white-space: nowrap;
+            padding: 10px 16px;
+        }
+
         .modal-foot .btn-ghost {
             flex: 1;
             justify-content: center;
