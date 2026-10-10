@@ -11,7 +11,6 @@
 const { app, BrowserWindow, shell, dialog, Menu, ipcMain } = require('electron')
 const path = require('node:path')
 const fs = require('node:fs')
-const net = require('node:net')
 const http = require('node:http')
 
 // electron-builder 打包后:
@@ -24,28 +23,6 @@ const appRoot = isPackaged ? path.join(process.resourcesPath, 'app') : path.join
 let mainWindow = null
 let workspaceServer = null
 let serverPort = null
-
-/**
- * 找一个空闲端口。避免固定 3000 端口在用户已启动 CLI 服务时冲突。
- */
-function findFreePort (preferred = 3000) {
-  return new Promise((resolve, reject) => {
-    const tryPort = (port, attempt = 0) => {
-      if (attempt > 20) return reject(new Error('无法找到可用端口'))
-
-      const server = net.createServer()
-      server.unref()
-      server.on('error', () => {
-        //端口被占用, 往下顺延
-        tryPort(preferred + attempt + 1, attempt + 1)
-      })
-      server.listen({ port, host: '127.0.0.1' }, () => {
-        server.close(() => resolve(port))
-      })
-    }
-    tryPort(preferred)
-  })
-}
 
 /**
  * 等待 HTTP 服务就绪, 避免窗口打开时白屏。
@@ -80,8 +57,6 @@ function waitForServer (port, timeout = 15000) {
  * 启动内置的 WorkspaceServer (复用 src/workspace/workspace-server.ts)
  */
 async function startWorkspaceServer () {
-  serverPort = await findFreePort(3000)
-
   // WorkspaceServer 从 process.env.WORKSPACE_ROOT 读取工作区根目录
   process.env.WORKSPACE_ROOT = path.join(app.getPath('userData'), 'workspaces')
   fs.mkdirSync(process.env.WORKSPACE_ROOT, { recursive: true })
@@ -97,11 +72,61 @@ async function startWorkspaceServer () {
     throw new Error(`未找到编译产物, 请先执行 pnpm build\n已查找:\n${candidates.join('\n')}`)
   }
 
-  const { WorkspaceServer } = await import(`file://${serverEntry}`)
-  workspaceServer = new WorkspaceServer(serverPort)
+  const mod = await import(`file://${serverEntry}`)
 
-  await waitForServer(serverPort)
-  return serverPort
+  // vite 打包时 exports:'named' + preserveModules:false 会把所有模块合并,
+  // 类名被压缩成 W / E 之类的短名(实测 workspace-server.js 导出键仅 ['W'])。
+  // 因此按「实例方法签名」识别, 而不是硬编码被压缩的名字。
+  const WorkspaceServer = mod.WorkspaceServer || findByShape(mod)
+  if (typeof WorkspaceServer !== 'function') {
+    throw new Error(`WorkspaceServer 未找到, 模块实际导出: ${Object.keys(mod).join(', ')}`)
+  }
+
+  // 端口占用必须在new 之前预检: WorkspaceServer 内部的 WebSocketServer
+  // 监听失败时抛的是 EventEmitter 的 'error' 事件而非同步异常,
+  // try/catch 抓不到, 会直接冒泡成未捕获错误让进程崩溃。
+  let lastError = null
+  for (let port = 3000; port < 3050; port++) {
+    if (!(await isPortFree(port))) continue
+    try {
+      const instance = new WorkspaceServer(port)
+      await waitForServer(port)
+      workspaceServer = instance
+      serverPort = port
+      return port
+    } catch (err) {
+      lastError = err
+      if (err && err.code === 'EADDRINUSE') continue
+      throw err
+    }
+  }
+  throw new Error(`3000-3049 范围内无可用端口: ${lastError && lastError.message}`)
+}
+
+/**
+ * 用一次真实的 bind/listen/close 判断端口是否空闲。
+ * 与 WorkspaceServer 的监听方式(http server + WebSocketServer)保持一致。
+ */
+function isPortFree (port) {
+  return new Promise(resolve => {
+    const tester = http.createServer()
+    tester.once('error', () => resolve(false))
+    tester.once('listening', () => tester.close(() => resolve(true)))
+    tester.listen(port)
+  })
+}
+
+/**
+ * 从模块导出里找出 WorkspaceServer: 唯一拥有 setupMiddleware/setupRoutes
+ * 这组实例方法的构造函数。
+ */
+function findByShape (mod) {
+  const MARKERS = ['setupMiddleware', 'setupRoutes', 'setupWebSocket']
+  return Object.values(mod).find(
+    value =>
+      typeof value === 'function' &&
+      MARKERS.every(m => typeof value.prototype?.[m] === 'function')
+  )
 }
 
 function createWindow (port) {
