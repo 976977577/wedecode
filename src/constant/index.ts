@@ -1,16 +1,6 @@
 export const isWindows = /^win/.test(process.platform);
 export const isMac = /^darwin/.test(process.platform);
 
-/**
- * 小程序信息查询接口 (按 appid 查昵称/描述/头像等)。
- *
- * 旧接口 https://kainy.cn/api/weapp/info/ 已无法访问 (实测被 Cloudflare 403 拦截),
- * 现改用官方新域名 open.kainy.cn, 鉴权方式为请求头 x-api-key。
- * key 可在 https://open.kainy.cn/register/ 自行申请后替换下面的值。
- * */
-export const WXAPP_QUERY_API = 'https://open.kainy.cn/api/AppidQuery';
-export const WXAPP_QUERY_API_KEY = '26c0418c202032f5537dcac8836a06a756f6a952274e0d5b721c0d03f105d101';
-
 export const cssBodyToPageReg = /body\s*\{/g
 
 /**

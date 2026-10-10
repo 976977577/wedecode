@@ -1,8 +1,7 @@
 import path from "node:path";
 import { clearScreen } from "@/utils/common";
 import { glob } from "glob";
-import { PackageInfoResult, SacnPackagesPathItem, ScanPackagesResultInfo } from "@/typings/index";
-import { WxAppInfoUtils } from "@/utils/wxapp-info";
+import { SacnPackagesPathItem, ScanPackagesResultInfo } from "@/typings/index";
 import colors from "picocolors";
 import prompts from "@/bin/wedecode/inquirer";
 import { AppMainPackageNames, globPathList, YesOrNoEnum } from "@/bin/wedecode/enum";
@@ -109,7 +108,6 @@ export async function scanPackagesForDisplay(manualScanPath: string = ''): Promi
     nameResolved: boolean
   }>
   scannedPathList: string[]
-  nameLookupFailed: boolean
 }> {
   const scanPathList: string[] = manualScanPath.trim()
     ? [path.resolve(manualScanPath)]
@@ -117,69 +115,29 @@ export async function scanPackagesForDisplay(manualScanPath: string = ''): Promi
 
   const list = scanPackagesPure(manualScanPath)
 
-  // 昵称只能由远程查询接口提供(open.kainy.cn), 本地包内不含该信息。
-  // 一次可能扫到几十个包, 故限制并发, 避免串行叠加 10s 超时。
-  const CONCURRENCY = 5
-  const results: Array<Record<any, any>> = new Array(list.length)
-  let resolvedCount = 0
-  let cursor = 0
-
-  const worker = async () => {
-    while (cursor < list.length) {
-      const index = cursor++
-      const item = list[index]
-      let mtime = new Date()
-      try {
-        mtime = fs.statSync(item.storagePath).mtime
-      } catch {
-      }
-      const updateDate = `${mtime.getMonth() + 1}/${mtime.getDate()} ${mtime.toLocaleTimeString()}`
-
-      if (!item.isAppId) {
-        results[index] = {
-          appId: item.appId,
-          storagePath: item.storagePath,
-          isAppId: false,
-          appName: item.appId,
-          updateDate,
-          description: item.storagePath,
-          nameResolved: false
-        }
-        continue
-      }
-
-      let nickname = ''
-      let description = ''
-      try {
-        const info = await WxAppInfoUtils.getWxAppInfo(item.appId)
-        nickname = info?.nickname || ''
-        description = info?.description || ''
-      } catch {
-      }
-      if (nickname) resolvedCount++
-
-      results[index] = {
-        appId: item.appId,
-        storagePath: item.storagePath,
-        isAppId: true,
-        appName: nickname || item.appId,
-        updateDate,
-        description,
-        nameResolved: Boolean(nickname)
-      }
+  // 昵称的唯一来源是第三方付费查询接口, 本项目不接入, 故展示名就是 appid。
+  // 整个扫描过程纯本地、不发任何网络请求。
+  const packages = list.map(item => {
+    let mtime = new Date()
+    try {
+      mtime = fs.statSync(item.storagePath).mtime
+    } catch {
+      // 目录可能已被清理
     }
-  }
+    return {
+      appId: item.appId,
+      storagePath: item.storagePath,
+      isAppId: item.isAppId,
+      appName: item.appId,
+      updateDate: `${mtime.getMonth() + 1}/${mtime.getDate()} ${mtime.toLocaleTimeString()}`,
+      description: item.storagePath,
+      nameResolved: false
+    }
+  })
 
-  await Promise.all(
-    Array.from({ length: Math.min(CONCURRENCY, list.length) }, () => worker())
-  )
-
-  const appidCount = list.filter(i => i.isAppId).length
   return {
-    packages: results,
-    scannedPathList: scanPathList,
-    // 有 appid 却一个昵称都没拿到 → 基本可判定远程接口不可用
-    nameLookupFailed: appidCount > 0 && resolvedCount === 0
+    packages,
+    scannedPathList: scanPathList
   }
 }
 
@@ -250,28 +208,17 @@ export async function startSacnPackagesProcess(manualScanPath?: string): Promise
       value: "description"
     },
   ]
-  const rowsPromiseList = sortedPackageList
-    .map(async ({ item, statInfo }) => {
+  const rows = sortedPackageList
+    .map(({ item, statInfo }) => {
       const date = new Date(statInfo.mtime)
-      const dateString = `${date.getMonth() + 1}/${date.getDate()} ${date.toLocaleTimeString()}`
-      if (!item.isAppId) return {
-        appName: item.appId,
-        updateDate: dateString,
-        description: item.storagePath
-      }
-      const appId = item.appId
-      const { nickname, description } = await getWxAppInfo(appId);
+      // 昵称需付费接口查询, 本项目不接入, 展示名直接用 appid
       return {
-        appName: nickname || appId,
-        updateDate: dateString,
-        description: description || '',
+        appName: item.appId,
+        updateDate: `${date.getMonth() + 1}/${date.getDate()} ${date.toLocaleTimeString()}`,
+        description: item.storagePath
       };
     })
-  if (rowsPromiseList.length) {
-    console.log(' 获取小程序信息中...')
-  }
-  const rows = await Promise.all(rowsPromiseList)
-  if (rowsPromiseList.length) {
+  if (rows.length) {
     clearScreen()
     console.log('$ 选择一个包进行编译: ')
   }
@@ -285,11 +232,4 @@ export async function startSacnPackagesProcess(manualScanPath?: string): Promise
   console.log(`$ 选择了 ${packInfo.appName}( ${packInfo.appId} )`)
 
   return packInfo
-}
-
-/**
- * 获取 appid 所属主体信息
- * */
-async function getWxAppInfo(appid: string): Promise<Partial<PackageInfoResult>> {
-  return WxAppInfoUtils.getWxAppInfo(appid);
 }

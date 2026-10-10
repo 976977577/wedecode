@@ -175,7 +175,6 @@ export class WorkspaceServer {
     this.app.delete('/api/workspaces/:id/output', this.clearWorkspaceOutput.bind(this));
 
     // 工作区应用信息更新
-    this.app.put('/api/workspaces/:id/appinfo', this.updateWorkspaceAppInfo.bind(this));
 
     // 健康检查
     this.app.get('/api/health', (req, res) => {
@@ -432,16 +431,13 @@ export class WorkspaceServer {
         }
       }
 
-      const { packages, scannedPathList, nameLookupFailed } = await scanPackagesForDisplay(manualPath);
+      const { packages, scannedPathList } = await scanPackagesForDisplay(manualPath);
 
       res.json({
         success: true,
         count: packages.length,
         packages,
         scannedPathList,
-        // 昵称依赖第三方查询接口(open.kainy.cn), 可能鉴权失败或超额。
-        // 明确告知调用方, 避免用户困惑于「为什么只有 appid」
-        nameLookupFailed: Boolean(nameLookupFailed),
         // 扫不到时给出可操作的原因, 便于界面展示
         hint: packages.length === 0
           ? '未找到小程序包。请先在微信中打开任意小程序产生缓存, 然后重新扫描。'
@@ -822,36 +818,6 @@ export class WorkspaceServer {
   }
 
 
-
-  private async updateWorkspaceAppInfo(req: express.Request, res: express.Response): Promise<void> {
-    const workspaceId = req.params.id;
-    const workspace = this.workspaces.get(workspaceId);
-
-    if (!workspace) {
-      res.status(404).json({ error: 'Workspace not found' });
-      return;
-    }
-
-    try {
-      const { appInfo } = req.body;
-
-      // 更新工作区的小程序信息
-      workspace.appInfo = appInfo;
-      workspace.updatedAt = new Date();
-
-      // 保存到文件
-      this.saveWorkspaces();
-
-      res.json({
-        success: true,
-        message: 'App info updated successfully',
-        appInfo: workspace.appInfo
-      });
-    } catch (error) {
-      console.error('Update app info error:', error);
-      res.status(500).json({ error: 'Failed to update app info' });
-    }
-  }
 
   private async downloadWorkspace(req: express.Request, res: express.Response): Promise<void> {
     const workspaceId = req.params.id;

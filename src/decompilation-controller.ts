@@ -2,7 +2,6 @@ import fs from "node:fs";
 import { getPathResolveInfo, printLog } from "@/utils/common";
 import { AppMainPackageNames, isDev } from "@/bin/wedecode/enum";
 import { readLocalFile } from "@/utils/fs-process";
-import { WxAppInfoUtils } from "@/utils/wxapp-info";
 import { ProjectConfigUtils } from "@/utils/project-config";
 import { GameDecompilation } from "@/interface/game-decompilation";
 import { AppDecompilation } from "@/interface/app-decompilation";
@@ -74,13 +73,6 @@ class DecompilationController {
   }
 
   /**
-   * 尝试获取并更新小程序信息
-   */
-  private async tryGetAndUpdateAppInfo(packInfo: any): Promise<void> {
-    await WxAppInfoUtils.tryGetAndUpdateAppInfoFromPack(this.workspaceId, packInfo, 3000, this.config.wxid);
-  }
-
-  /**
    * 启动反编译流程
    * ]*/
   public async startDecompilerProcess(): Promise<void> {
@@ -141,11 +133,6 @@ class DecompilationController {
    * 收尾工作
    * */
   private async endingAllJob(): Promise<void> {
-    // 在解包模式下，也尝试获取小程序信息
-    if (this.firstPackInfo) {
-      await this.tryGetAndUpdateAppInfo(this.firstPackInfo)
-    }
-    
     if (this.config.unpackOnly) {
       printLog(` ✅  ${colors.bold(colors.green('解包流程结束!'))}`, { isEnd: true })
       return

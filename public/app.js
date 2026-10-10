@@ -146,27 +146,13 @@ class WedecodeApp {
             return;
         }
 
-        // 昵称只能由第三方接口提供, 该接口挂了就把原因说清楚,
-        // 否则用户会对着满屏 appid 不知道出了什么问题
-        const nameNotice = data.nameLookupFailed ? `
-            <div class="scan-notice">
-                <i class="fas fa-info-circle"></i>
-                <span>小程序名称需联网查询, 但该服务当前不可用(疑似被防护策略拦截), 因此仅显示 appid。这不影响反编译功能。</span>
-            </div>
-        ` : '';
-
         const items = packages.map((pkg, index) => {
-            const name = pkg.appName || pkg.appId;
-            const showRealName = Boolean(pkg.nameResolved && pkg.appName && pkg.appName !== pkg.appId);
-
             // 确定性配色: 同一 appid 永远得到同一个渐变色, 长列表里靠颜色就能扫视定位
             let hue = 0;
             for (const ch of String(pkg.appId)) hue = (hue * 31 + ch.charCodeAt(0)) % 360;
             const iconStyle = `background:linear-gradient(135deg,hsl(${hue},72%,58%),hsl(${(hue + 42) % 360},68%,46%))`;
-            // 没有真名时, 头像显示 appid 去掉 wx 前缀后的前两位, 比千篇一律的 "wx" 更可分辨
-            const iconText = showRealName
-                ? this.escapeHtml(String(name).trim().slice(0, 1).toUpperCase())
-                : (String(pkg.appId).replace(/^wx/i, '').slice(0, 2).toUpperCase() || 'WX');
+            // 头像显示 appid 去掉 wx 前缀后的前两位, 比千篇一律的 "wx" 更可分辨
+            const iconText = String(pkg.appId).replace(/^wx/i, '').slice(0, 2).toUpperCase() || 'WX';
 
             // 第二行只放有信息量的内容: 版本号 + 时间(去秒)。
             // 路径尾部就是 appid 本身, 平铺出来只是噪音, 完整路径挪到行悬浮提示。
@@ -174,15 +160,11 @@ class WedecodeApp {
             const version = segs[segs.length - 1] || '1';
             const shortTime = String(pkg.updateDate).replace(/:\d\d$/, '');
 
-            const nameHtml = showRealName
-                ? `${this.escapeHtml(name)}<span class="appid-sub">${this.escapeHtml(pkg.appId)}</span>`
-                : `<span class="appid-text">${this.escapeHtml(pkg.appId)}</span>`;
-
             return `
             <li class="pkg-row" title="${this.escapeHtml(pkg.storagePath)}">
                 <div class="pkg-icon" style="${iconStyle}">${this.escapeHtml(iconText)}</div>
                 <div class="pkg-main">
-                    <div class="pkg-name">${nameHtml}</div>
+                    <div class="pkg-name"><span class="appid-text">${this.escapeHtml(pkg.appId)}</span></div>
                     <div class="pkg-meta"><span class="ver">v${this.escapeHtml(version)}</span><span>${this.escapeHtml(shortTime)}</span></div>
                 </div>
                 <div class="pkg-side">
@@ -196,10 +178,7 @@ class WedecodeApp {
         }).join('');
 
         this.scanCount.innerHTML = `找到 <strong>${packages.length}</strong> 个包`;
-        this.scanBody.innerHTML = `
-            ${nameNotice}
-            <ul class="pkg-list">${items}</ul>
-        `;
+        this.scanBody.innerHTML = `<ul class="pkg-list">${items}</ul>`;
 
         // 收集行内元素引用, 后续只更新角标, 不整块重绘
         this.rowRefs = Array.from(this.scanBody.querySelectorAll('.pkg-row')).map((row, index) => {

@@ -21,7 +21,7 @@ program
   .option("--clear", '是否清空旧的产物')
   .option("--px", '是否使用 px 像素单位解析 css， 默认使用的是 rpx 单位')
   .option("--unpack-only", '是否只进行解包，不进行反编译')
-  .option("--wxid <wxid>", '指定微信小程序的 WXID，用于获取小程序信息')
+  .option("--wxid <wxid>", '指定微信小程序的 WXID，用于解密加密的 wxapkg 包')
   .action(async (argMap: Record<any, any>, options: Record<any, any>) => {
     await sleep(200)
     const args = options.args || []
