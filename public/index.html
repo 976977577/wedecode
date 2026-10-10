@@ -213,6 +213,14 @@
             min-width: 0;
         }
 
+        /* 日期列固定宽度且不参与收缩, 避免长路径把它挤出可视区 */
+        .scan-item-date {
+            color: #666;
+            font-size: 0.9em;
+            white-space: nowrap;
+            flex: 0 0 auto;
+        }
+
         .scan-item-name {
             color: #333;
             margin-bottom: 3px;
@@ -226,12 +234,6 @@
             font-size: 0.9em;
             overflow: hidden;
             text-overflow: ellipsis;
-            white-space: nowrap;
-        }
-
-        .scan-item-date {
-            color: #666;
-            font-size: 0.9em;
             white-space: nowrap;
         }
 
