@@ -340,6 +340,24 @@ class WedecodeApp {
         ref.badge.title = titles[status] || '';
     }
 
+    /**
+     * 抹掉一次编译在列表上留下的痕迹: 角标复位、行引用解绑、会话表移除。
+     * 产物被清除后必须调用 —— 否则列表还挂着「已完成」角标,
+     * 点进去却已经没有产物, 状态与磁盘不一致。
+     */
+    resetSessionState(session) {
+        if (!session) return;
+
+        const ref = this.rowRefs[session.pkgIndex];
+        if (ref) {
+            ref.badge.className = 'pkg-badge';
+            ref.badge.innerHTML = '';
+            ref.badge.title = '';
+            ref.session = null;
+        }
+        if (session.executionId) this.sessions.delete(session.executionId);
+    }
+
     /* ==================== 日志弹窗 ==================== */
 
     openLogModal(session) {
@@ -488,11 +506,16 @@ class WedecodeApp {
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || '清除失败');
 
-            const msg = data.removed ? '已清除本次构建产物' : (data.message || '产物目录不存在, 无需清理');
-            if (this.modalSession) {
-                this.appendLog(this.modalSession, msg, data.removed ? 'success' : 'info');
+            if (data.removed) {
+                // 产物已删, 该包回到「未编译」状态: 关闭弹窗并把列表角标撤掉,
+                // 否则列表还挂着成功角标, 点进去却已经没有产物可看了。
+                this.resetSessionState(this.modalSession);
+                this.closeLogModal();
+            } else {
+                const msg = data.message || '产物目录不存在, 无需清理';
+                if (this.modalSession) this.appendLog(this.modalSession, msg, 'info');
+                this.flashButton(this.clearOutputBtn, '<i class="fas fa-check"></i> 已清除');
             }
-            this.flashButton(this.clearOutputBtn, '<i class="fas fa-check"></i> 已清除');
         } catch (err) {
             const msg = err.message || String(err);
             if (this.modalSession) this.appendLog(this.modalSession, '清除产物失败: ' + msg, 'error');
