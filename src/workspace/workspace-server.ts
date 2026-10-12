@@ -1288,7 +1288,11 @@ export class WorkspaceServer {
         stdio: ['pipe', 'pipe', 'pipe'],
         env: {
           ...process.env,
-          WEDECODE_CHILD_PROCESS: 'true'  // 标识这是一个子进程
+          WEDECODE_CHILD_PROCESS: 'true',  // 标识这是一个子进程
+          // 桌面版里 process.execPath 是 Electron 二进制自身,
+          // 不加此变量 spawn 出来的是又一个 GUI 实例, 秒退导致
+          // 「无日志直接显示完成、实际没有编译」。CLI(纯 node)下该变量被忽略, 无副作用。
+          ELECTRON_RUN_AS_NODE: '1'
         }
       });
 
@@ -1455,7 +1459,11 @@ export class WorkspaceServer {
         stdio: ['pipe', 'pipe', 'pipe'],
         env: {
           ...process.env,
-          WEDECODE_CHILD_PROCESS: 'true'  // 标识这是一个子进程
+          WEDECODE_CHILD_PROCESS: 'true',  // 标识这是一个子进程
+          // 桌面版里 process.execPath 是 Electron 二进制自身,
+          // 不加此变量 spawn 出来的是又一个 GUI 实例, 秒退导致
+          // 「无日志直接显示完成、实际没有编译」。CLI(纯 node)下该变量被忽略, 无副作用。
+          ELECTRON_RUN_AS_NODE: '1'
         }
       });
 

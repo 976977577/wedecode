@@ -85,7 +85,8 @@ export class UnpackWxapkg {
       } else {
         console.log(` \n\u274C ${colors.red(
           '检测到加密包，但无法从路径中提取 wxid\n' +
-          '请确保包路径中包含小程序 appid (如 wx1234567890abcdef)')}`
+          '请确保包路径中包含小程序 appid (如 wx1234567890abcdef)\n' +
+          `当前解析路径: ${inputPath}`)}`
         );
         process.exit(0);
       }

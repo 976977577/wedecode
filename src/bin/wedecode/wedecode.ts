@@ -48,4 +48,9 @@ program
     new WorkspaceServer(port);
   })
 
-program.parse();
+// 必须显式指定 from:'node': commander 见到 process.versions.electron 会切到
+// 'electron' 参数约定, 而打包后的 app 里 process.defaultApp 为 undefined,
+// 导致 argv.slice(1) —— 脚本路径 dist/wedecode.js 被当成位置参数(输入包),
+// 表现为「检测到加密包但无法提取 wxid」。本入口只会以 node / ELECTRON_RUN_AS_NODE
+// 模式运行(桌面版 spawn 时已设 ELECTRON_RUN_AS_NODE=1), argv 恒为 node 格式。
+program.parse(process.argv, { from: 'node' });
