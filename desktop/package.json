@@ -11,7 +11,8 @@
     "start": "electron .",
     "dev": "electron . --dev",
     "build:app": "electron-builder --dir",
-    "build:dmg": "electron-builder --mac dmg"
+    "build:dmg": "electron-builder --mac dmg",
+    "sync:app": "test -d release/Wedecode.app || { echo '未找到 release/Wedecode.app, 请先执行 pnpm build:app'; exit 1; }; cd .. && pnpm build && cd desktop && ditto ../public release/Wedecode.app/Contents/Resources/app/public && ditto ../dist release/Wedecode.app/Contents/Resources/app/dist && codesign --force --deep --sign - release/Wedecode.app && echo 'App 已同步最新前端并重签'"
   },
   "dependencies": {
     "@biggerstar/deepmerge": "^1.0.3",
