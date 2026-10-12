@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "description": "微信小程序 wxapkg 反编译工具 —— 桌面版",
   "private": true,
-  "main": "main.js",
+  "main": "main.cjs",
   "author": "Fanpeng <976977577@qq.com>",
   "license": "GPL-3.0-or-later",
   "scripts": {
@@ -50,7 +50,7 @@
       "buildResources": "build"
     },
     "files": [
-      "main.js",
+      "main.cjs",
       "preload.cjs",
       "store.cjs",
       "!**/*.map"
@@ -87,5 +87,6 @@
     "dmg": {
       "title": "Wedecode 桌面版"
     }
-  }
+  },
+  "type": "module"
 }
