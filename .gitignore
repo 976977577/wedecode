@@ -15,6 +15,9 @@ build.xml
 .gradle/
 build/
 captures/
+# 桌面端构建资源(应用图标)不忽略, electron-builder 需要
+!desktop/build/
+!desktop/build/**
 node_modules
 wxapkg
 /pkg/
