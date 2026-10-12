@@ -191,7 +191,7 @@ class WedecodeApp {
                     ${this.escapeHtml(data.hint || '未找到小程序包')}
                     <br><br>
                     小程序包是在用微信打开小程序后才缓存到本地的。如果路径与你的微信版本不符,
-                    可以在 GitHub 反馈你的微信版本号与实际缓存路径。
+                    可以联系作者反馈你的微信版本号与实际缓存路径。
                 </div>
                 ${pathsHtml}
             `;
