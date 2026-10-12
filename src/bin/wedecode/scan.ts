@@ -66,6 +66,48 @@ async function findWxMiniProgramPackDir(manualScanPath: string): Promise<SacnPac
 }
 
 /**
+ * 检测微信数据目录是否因缺少系统授权而不可读。
+ *
+ * macOS 的 TCC 机制: 未授予「完全磁盘访问权限」时, 访问
+ * ~/Library/Containers/com.tencent.xinWeChat/ 下的目录会返回 EPERM,
+ * 而 glob 遇到无权限目录是静默跳过的 —— 表现为「扫不到任何包且没有任何提示」。
+ * 这里主动探测一次, 把权限问题暴露出来, 让界面能给出明确的引导。
+ *
+ * 探测方式: 从已知的微信数据路径逐级向上找第一个真实存在的祖先目录,
+ * 对它做 readdir: EPERM/EACCES => 授权缺失; ENOENT => 继续向上; 能读 => 无问题。
+ * (Windows/Linux 无 TCC, 此检测目前仅对 darwin 有意义, 但逻辑平台无关)
+ * */
+export function detectScanPermissionIssue(): { denied: boolean; deniedPath: string | null } {
+  if (process.platform === 'darwin') {
+    const home = os.homedir()
+    const probes = [
+      path.join(home, 'Library/Containers/com.tencent.xinWeChat/Data/.wxapplet/packages'),
+      path.join(home, 'Library/Containers/com.tencent.xinWeChat/Data/Documents/app_data/radium/Applet/packages'),
+      path.join(home, 'Library/Containers/com.tencent.xinWeChat/Data/Documents/app_data/radium/users'),
+    ]
+    for (const probe of probes) {
+      let cur = probe
+      while (cur !== path.dirname(cur)) {
+        try {
+          fs.readdirSync(cur)
+          break // 该探测路径可读, 无权限问题
+        } catch (err: any) {
+          if (err && (err.code === 'EPERM' || err.code === 'EACCES')) {
+            return { denied: true, deniedPath: cur }
+          }
+          if (err && err.code === 'ENOENT') {
+            cur = path.dirname(cur) // 这一层不存在, 向上找
+            continue
+          }
+          break // 其它错误(如 ENOTDIR), 不判定为权限问题
+        }
+      }
+    }
+  }
+  return { denied: false, deniedPath: null }
+}
+
+/**
  * 纯扫描: 在给定目录(或默认的微信包路径)下查找所有小程序主包。
  *
  * 与 CLI 交互流程解耦 —— 不弹提示、不清屏、不退出进程,
@@ -115,6 +157,10 @@ export async function scanPackagesForDisplay(manualScanPath: string = ''): Promi
   scannedPathList: string[]
   /** 图标索引诊断信息, 便于排查「为什么没图标」 */
   iconStats: { indexed: number; dirs: string[] }
+  /** 微信数据目录因缺少「完全磁盘访问权限」等系统授权而不可读 */
+  permissionDenied: boolean
+  /** 触发权限拒绝的具体目录(诊断用) */
+  permissionDeniedPath: string | null
 }> {
   const scanPathList: string[] = manualScanPath.trim()
     ? [path.resolve(manualScanPath)]
@@ -143,10 +189,15 @@ export async function scanPackagesForDisplay(manualScanPath: string = ''): Promi
     }
   }))
 
+  // 扫不到包时, 主动区分「确实没有包」和「没有系统授权读不到」
+  const permission = detectScanPermissionIssue()
+
   return {
     packages,
     scannedPathList: scanPathList,
-    iconStats: getAppletIconStats()
+    iconStats: getAppletIconStats(),
+    permissionDenied: permission.denied,
+    permissionDeniedPath: permission.deniedPath
   }
 }
 

@@ -184,9 +184,28 @@ class WedecodeApp {
             const pathsHtml = pathList.length
                 ? `<div class="scan-paths">已查找:<br>${pathList.map(p => `<code>${this.escapeHtml(p)}</code>`).join('<br>')}</div>`
                 : '';
+
+            // macOS 未授予「完全磁盘访问权限」时, 微信数据目录整个不可读,
+            // 表现与「没扫到包」一模一样 —— 必须把这种情况单独拎出来提示
+            const permWarning = data.permissionDenied
+                ? `
+                <div class="perm-warning">
+                    <div class="perm-title"><i class="fas fa-triangle-exclamation"></i> 无法访问微信的数据目录</div>
+                    <div class="perm-desc">
+                        macOS 未授予<b>「完全磁盘访问权限」</b>时, 无法读取微信缓存的小程序包。<br>
+                        请到 <b>系统设置 → 隐私与安全性 → 完全磁盘访问权限</b> 开启 Wedecode 的开关,
+                        然后点击下方的「重新扫描」。
+                    </div>
+                    <button type="button" class="btn-primary perm-btn" id="openPermSettings">
+                        <i class="fas fa-sliders"></i> 打开系统设置
+                    </button>
+                </div>`
+                : '';
+
             this.rowRefs = [];
             this.scanCount.textContent = '';
             this.scanBody.innerHTML = `
+                ${permWarning}
                 <div class="scan-hint">
                     ${this.escapeHtml(data.hint || '未找到小程序包')}
                     <br><br>
@@ -195,6 +214,11 @@ class WedecodeApp {
                 </div>
                 ${pathsHtml}
             `;
+            // 跳转系统设置的「完全磁盘访问权限」面板;
+            // 桌面版由主进程 shell.openExternal 接管, 浏览器模式由系统弹窗确认
+            document.getElementById('openPermSettings')?.addEventListener('click', () => {
+                window.open('x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles');
+            });
             return;
         }
 

@@ -494,7 +494,8 @@ export class WorkspaceServer {
         }
       }
 
-      const { packages, scannedPathList, iconStats } = await scanPackagesForDisplay(manualPath);
+      const { packages, scannedPathList, iconStats, permissionDenied, permissionDeniedPath } =
+        await scanPackagesForDisplay(manualPath);
 
       res.json({
         success: true,
@@ -506,7 +507,10 @@ export class WorkspaceServer {
         // 扫不到时给出可操作的原因, 便于界面展示
         hint: packages.length === 0
           ? '未找到小程序包。请先在微信中打开任意小程序产生缓存, 然后重新扫描。'
-          : ''
+          : '',
+        // macOS 未授予「完全磁盘访问权限」时微信数据目录不可读, 界面据此给出授权引导
+        permissionDenied,
+        permissionDeniedPath
       });
     } catch (error) {
       console.error('扫描失败:', error);

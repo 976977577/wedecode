@@ -188,6 +188,33 @@
             line-height: 1.7;
         }
 
+        /* 缺少「完全磁盘访问权限」的引导提示 */
+        .perm-warning {
+            margin: 14px 18px;
+            background: #fdeef0;
+            border: 1px solid #f5c6cb;
+            border-radius: 10px;
+            padding: 14px 16px;
+            line-height: 1.7;
+        }
+
+        .perm-warning .perm-title {
+            color: var(--danger);
+            font-weight: 600;
+            margin-bottom: 6px;
+        }
+
+        .perm-warning .perm-desc {
+            color: #8a3a3e;
+            font-size: .93em;
+            margin-bottom: 10px;
+        }
+
+        .perm-warning .perm-btn {
+            padding: 7px 16px;
+            font-size: .9em;
+        }
+
         .scan-hint code {
             background: rgba(0, 0, 0, .05);
             padding: 1px 5px;
